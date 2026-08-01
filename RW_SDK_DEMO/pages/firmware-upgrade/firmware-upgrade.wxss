@@ -1,0 +1,225 @@
+.firmware-page {
+  padding-bottom: 60rpx;
+}
+
+.page-heading {
+  padding: 10rpx 4rpx 28rpx;
+}
+
+.page-title {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.page-subtitle {
+  margin-top: 8rpx;
+  color: #87928d;
+  font-size: 24rpx;
+}
+
+.warning-card {
+  padding: 24rpx 26rpx;
+  border: 2rpx solid #f0d5b9;
+  border-radius: 22rpx;
+  background: #fff8ee;
+}
+
+.warning-title {
+  color: #ae632b;
+  font-size: 27rpx;
+  font-weight: 650;
+}
+
+.warning-text {
+  margin-top: 9rpx;
+  color: #9b7659;
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+
+.device-info-card,
+.validation-card {
+  padding: 0 26rpx;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 82rpx;
+  border-bottom: 1rpx solid #edf1ef;
+  color: #727d78;
+  font-size: 25rpx;
+}
+
+.info-row:last-child {
+  border-bottom: 0;
+}
+
+.info-row text:last-child {
+  max-width: 430rpx;
+  color: #27322d;
+  text-align: right;
+  word-break: break-all;
+}
+
+.info-row .connected {
+  color: #0c9568;
+}
+
+.info-row .disconnected {
+  color: #c55c52;
+}
+
+.file-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.import-button {
+  min-width: 180rpx;
+  margin: 0 0 16rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: #e1f2eb;
+  color: #0a865e;
+  font-size: 24rpx;
+  line-height: 66rpx;
+}
+
+.file-list {
+  overflow: hidden;
+}
+
+.file-cell {
+  display: flex;
+  align-items: center;
+  min-height: 122rpx;
+  padding: 22rpx 24rpx;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid #edf1ef;
+}
+
+.file-cell:last-child {
+  border-bottom: 0;
+}
+
+.file-cell.selected {
+  background: #f0faf6;
+}
+
+.file-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62rpx;
+  height: 62rpx;
+  flex: none;
+  border-radius: 18rpx;
+  background: #e3f2ec;
+  color: #13845f;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.file-main {
+  min-width: 0;
+  flex: 1;
+  margin-left: 20rpx;
+}
+
+.file-name {
+  color: #26312c;
+  font-size: 27rpx;
+  font-weight: 620;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.file-meta,
+.file-date {
+  margin-top: 6rpx;
+  color: #82908a;
+  font-size: 21rpx;
+}
+
+.file-check {
+  width: 40rpx;
+  color: #0c9568;
+  font-size: 31rpx;
+  text-align: right;
+}
+
+.validation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 106rpx;
+}
+
+.validation-main {
+  min-width: 0;
+  flex: 1;
+  padding-right: 24rpx;
+}
+
+.validation-title {
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.validation-subtitle {
+  margin-top: 6rpx;
+  color: #8c9792;
+  font-size: 21rpx;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.progress-card {
+  margin-top: 30rpx;
+  padding: 24rpx 26rpx;
+  border-radius: 22rpx;
+  background: #fff;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  color: #69766f;
+  font-size: 23rpx;
+}
+
+.progress-header text:first-child {
+  max-width: 560rpx;
+}
+
+.progress-track {
+  height: 12rpx;
+  margin-top: 18rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #e8efec;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #18ad79, #0b8b62);
+  transition: width 160ms ease;
+}
+
+.upgrade-button {
+  margin-top: 28rpx;
+  border-radius: 999rpx;
+  background: #0c9568;
+  color: #fff;
+  font-size: 27rpx;
+}
+
+.upgrade-button[disabled] {
+  background: #b8c9c1;
+  color: rgba(255, 255, 255, 0.9);
+}

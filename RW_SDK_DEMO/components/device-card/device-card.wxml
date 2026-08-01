@@ -1,0 +1,17 @@
+<view class="device-card {{compact ? 'compact' : ''}}" bindtap="select">
+  <view class="ring-icon"><view class="ring-hole"></view></view>
+  <view class="device-content">
+    <view class="device-heading">
+      <text class="device-name">{{device.name || 'RW 智能戒指'}}</text>
+      <text class="status {{statusClass}}">{{statusText}}</text>
+    </view>
+    <view class="device-meta">
+      <view class="device-identifiers">
+        <text class="device-address">MAC：{{macAddressText || '连接后获取'}}</text>
+        <text class="device-id">deviceId：{{deviceIdText}}</text>
+      </view>
+      <text class="device-power">电量 {{powerText}}</text>
+    </view>
+  </view>
+  <text class="arrow">›</text>
+</view>

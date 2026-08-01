@@ -1,0 +1,54 @@
+<view class="page search-page">
+  <view class="scan-header">
+    <view class="radar {{scanning ? 'active' : ''}}">
+      <view class="radar-ring ring-one"></view>
+      <view class="radar-ring ring-two"></view>
+      <view class="radar-center"></view>
+    </view>
+    <view class="scan-title">{{scanning ? '正在搜索附近设备' : '搜索已暂停'}}</view>
+    <view wx:if="{{scanning}}" class="scan-countdown">{{scanRemainingSeconds}} 秒后自动暂停</view>
+    <view class="scan-subtitle">请保持戒指电量充足并靠近手机</view>
+    <button wx:if="{{scanning}}" class="scan-button secondary" bindtap="stopScan">停止搜索</button>
+    <button wx:else class="scan-button" bindtap="startScan">重新搜索</button>
+  </view>
+
+  <view class="section-title">发现的设备<text class="section-caption">{{devices.length}} 台</text></view>
+  <view wx:if="{{devices.length}}" class="card device-list">
+    <view
+      wx:for="{{devices}}"
+      wx:key="deviceId"
+      class="search-device"
+      data-id="{{item.deviceId}}"
+      bindtap="connectDevice"
+    >
+      <view class="search-ring"><view class="search-hole"></view></view>
+      <view class="search-main">
+        <view class="search-name">{{item.name}}</view>
+        <view class="search-address">MAC：{{item.macAddressText}}</view>
+        <view class="search-id">deviceId：{{item.deviceIdText}}</view>
+      </view>
+      <view class="signal">
+        <view class="signal-text">{{item.signalText}}</view>
+        <view wx:if="{{!item.systemConnected}}" class="signal-value">{{item.RSSI}} dBm</view>
+      </view>
+      <view wx:if="{{connectingId === item.deviceId}}" class="connecting-dot"></view>
+      <text wx:else class="chevron">›</text>
+    </view>
+  </view>
+
+  <view wx:else class="card empty-card">
+    <view class="empty-title">暂未发现设备</view>
+    <view class="empty-text">确认戒指未被其他手机连接，下拉或点击重新搜索。</view>
+  </view>
+
+  <view wx:if="{{error}}" class="error-box">{{error}}</view>
+
+  <view class="log-heading">
+    <text>连接日志</text>
+    <text class="copy-log" bindtap="copyLogs">复制</text>
+  </view>
+  <view class="log-card">
+    <view wx:if="{{!logs.length}}" class="log-empty">暂无日志</view>
+    <view wx:for="{{logs}}" wx:key="index" class="log-line">{{item}}</view>
+  </view>
+</view>

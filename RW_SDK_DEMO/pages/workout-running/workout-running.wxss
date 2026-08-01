@@ -1,0 +1,35 @@
+.running-page { padding-top: 18rpx; }
+
+.workout-hero {
+  padding: 34rpx 32rpx 42rpx;
+  border-radius: 30rpx;
+  background: linear-gradient(145deg, #103c2d, #0b9d6d);
+  color: #fff;
+  box-shadow: 0 16rpx 38rpx rgba(12, 103, 75, .22);
+}
+.workout-hero.paused { background: linear-gradient(145deg, #4d4531, #a17a2d); }
+.hero-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.hero-label { color: rgba(255,255,255,.68); font-size: 22rpx; }
+.hero-title { margin-top: 7rpx; font-size: 38rpx; font-weight: 700; }
+.status-pill { padding: 9rpx 17rpx; border-radius: 999rpx; background: rgba(255,255,255,.16); font-size: 21rpx; }
+.hero-time { margin-top: 48rpx; font-size: 72rpx; line-height: 84rpx; font-weight: 720; letter-spacing: 4rpx; text-align: center; }
+.hero-time-label { color: rgba(255,255,255,.62); font-size: 21rpx; text-align: center; }
+
+.connect-tip { margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 20rpx; background: #fff2df; color: #98651e; font-size: 22rpx; line-height: 34rpx; }
+
+.metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rpx; margin-top: 24rpx; }
+.metric-card { padding: 28rpx; border-radius: 24rpx; background: #fff; }
+.metric-value { overflow: hidden; font-size: 40rpx; line-height: 52rpx; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+.metric-label { margin-top: 7rpx; color: #8b9690; font-size: 22rpx; }
+.heart-card .metric-value { color: #d05a5a; }
+
+.control-panel { display: flex; gap: 18rpx; margin-top: 28rpx; }
+.control-button { flex: 1; border-radius: 999rpx; color: #fff; font-size: 26rpx; }
+.control-button.pause { background: #d39a34; }
+.control-button.continue { background: #0c9b6c; }
+.control-button.finish { background: #d85b5b; }
+.finished-text { width: 100%; padding: 24rpx; border-radius: 22rpx; background: #e9eeeb; color: #7d8882; text-align: center; }
+
+.notice-card { margin-top: 30rpx; padding: 26rpx; border-radius: 24rpx; background: #eef5f1; }
+.notice-title { color: #405149; font-size: 25rpx; font-weight: 650; }
+.notice-text { margin-top: 10rpx; color: #77847e; font-size: 22rpx; line-height: 36rpx; }

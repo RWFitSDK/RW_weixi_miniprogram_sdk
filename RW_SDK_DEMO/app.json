@@ -1,0 +1,29 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/device/device",
+    "pages/search/search",
+    "pages/history/history",
+    "pages/workout/workout",
+    "pages/workout-running/workout-running",
+    "pages/firmware-upgrade/firmware-upgrade"
+  ],
+  "window": {
+    "navigationBarTitleText": "RW 健康",
+    "navigationBarBackgroundColor": "#f4f7f5",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f7f5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8a948f",
+    "selectedColor": "#0c9b6c",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "首页" },
+      { "pagePath": "pages/device/device", "text": "设备" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

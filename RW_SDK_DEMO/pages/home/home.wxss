@@ -1,0 +1,157 @@
+.home-page {
+  padding-top: 12rpx;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22rpx 4rpx 34rpx;
+}
+
+.hero-title {
+  font-size: 40rpx;
+  line-height: 54rpx;
+  font-weight: 700;
+  letter-spacing: -1rpx;
+}
+
+.hero-subtitle {
+  margin-top: 7rpx;
+  color: #87928d;
+  font-size: 24rpx;
+}
+
+.hero-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 70rpx;
+  height: 70rpx;
+  border-radius: 22rpx;
+  background: #e1f3eb;
+  color: #0c9468;
+  font-size: 23rpx;
+  font-weight: 750;
+}
+
+.unbound-card {
+  display: flex;
+  align-items: center;
+  min-height: 142rpx;
+  padding: 28rpx;
+  box-sizing: border-box;
+  border: 2rpx dashed #b9c8c1;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.unbound-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #e2f3ec;
+  color: #0c9b6c;
+  font-size: 42rpx;
+  font-weight: 300;
+}
+
+.unbound-content {
+  flex: 1;
+  margin-left: 24rpx;
+}
+
+.unbound-title {
+  font-size: 30rpx;
+  font-weight: 620;
+}
+
+.unbound-subtitle {
+  margin-top: 8rpx;
+  color: #8a958f;
+  font-size: 23rpx;
+}
+
+.unbound-arrow {
+  color: #aeb9b4;
+  font-size: 44rpx;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+}
+
+.sync-progress {
+  overflow: hidden;
+  height: 6rpx;
+  margin: -12rpx 0 20rpx;
+  border-radius: 6rpx;
+  background: #dfe9e4;
+}
+
+.sync-progress-bar {
+  height: 100%;
+  border-radius: 6rpx;
+  background: #0c9b6c;
+  transition: width 180ms ease;
+}
+
+.health-card {
+  min-height: 238rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  border-radius: 24rpx;
+  background: #fff;
+  box-shadow: 0 8rpx 28rpx rgba(25, 60, 45, 0.05);
+}
+
+.health-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.health-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 17rpx;
+  background: #e7f5ef;
+  color: #0b9467;
+  font-size: 22rpx;
+  font-weight: 650;
+}
+
+.health-arrow {
+  color: #bdc5c1;
+  font-size: 36rpx;
+}
+
+.health-title {
+  margin-top: 18rpx;
+  color: #53605a;
+  font-size: 25rpx;
+}
+
+.health-value {
+  overflow: hidden;
+  margin-top: 7rpx;
+  font-size: 31rpx;
+  line-height: 42rpx;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-time {
+  margin-top: 6rpx;
+  color: #9aa39f;
+  font-size: 21rpx;
+}

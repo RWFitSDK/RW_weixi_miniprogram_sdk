@@ -1,0 +1,69 @@
+<view class="page firmware-page">
+  <view class="page-heading">
+    <view class="page-title">固件升级</view>
+    <view class="page-subtitle">从微信聊天导入厂家提供的固件文件</view>
+  </view>
+
+  <view class="warning-card">
+    <view class="warning-title">升级前请确认</view>
+    <view class="warning-text">仅使用设备厂家提供并确认适用于当前设备的固件。错误固件可能导致设备无法使用。</view>
+  </view>
+
+  <view class="section-title">当前设备<text class="section-caption">{{readingFirmwareInfo ? '正在获取' : '点击刷新固件信息'}}</text></view>
+  <view class="card device-info-card" bindtap="refreshFirmwareInfo">
+    <view class="info-row"><text>连接状态</text><text class="{{connected ? 'connected' : 'disconnected'}}">{{connected ? '已连接' : '未连接'}}</text></view>
+    <view class="info-row"><text>设备型号</text><text>{{currentDeviceModel}}</text></view>
+    <view class="info-row"><text>固件版本</text><text>{{currentVersion}}</text></view>
+  </view>
+
+  <view class="file-heading">
+    <view class="section-title">升级文件<text class="section-caption">最多保存 10 个</text></view>
+    <button class="import-button" disabled="{{upgrading}}" bindtap="importFirmware">从微信导入</button>
+  </view>
+
+  <view wx:if="{{files.length}}" class="card file-list">
+    <view
+      wx:for="{{files}}"
+      wx:key="id"
+      class="file-cell {{selectedId === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="selectFile"
+      bindlongpress="manageFile"
+    >
+      <view class="file-symbol">FW</view>
+      <view class="file-main">
+        <view class="file-name">{{item.fileName}}</view>
+        <view class="file-meta">{{item.sizeText}}</view>
+        <view class="file-date">{{item.dateText}} · 长按管理</view>
+      </view>
+      <view class="file-check">{{selectedId === item.id ? '✓' : ''}}</view>
+    </view>
+  </view>
+  <view wx:else class="card empty-card compact">
+    <view class="empty-title">还没有升级文件</view>
+    <view class="empty-text">先把厂家固件发送到微信聊天或文件传输助手，再点击“从微信导入”。</view>
+  </view>
+
+  <view class="section-title">文件校验</view>
+  <view class="card validation-card">
+    <view class="validation-row">
+      <view class="validation-main">
+        <view class="validation-title">对比设备型号</view>
+        <view class="validation-subtitle">检查文件名是否包含当前型号 {{currentDeviceModel}}</view>
+      </view>
+      <switch checked="{{compareModelEnabled}}" disabled="{{upgrading}}" color="#0c9568" bindchange="changeCompareModel" />
+    </view>
+  </view>
+
+  <view class="progress-card">
+    <view class="progress-header"><text>{{statusText}}</text><text>{{progress}}%</text></view>
+    <view class="progress-track"><view class="progress-fill" style="width: {{progress}}%"></view></view>
+  </view>
+
+  <button
+    class="upgrade-button"
+    loading="{{upgrading}}"
+    disabled="{{upgrading || !connected || !selectedId}}"
+    bindtap="startUpgrade"
+  >{{upgrading ? '正在升级' : '开始固件升级'}}</button>
+</view>

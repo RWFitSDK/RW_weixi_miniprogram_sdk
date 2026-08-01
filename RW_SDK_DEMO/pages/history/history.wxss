@@ -1,0 +1,162 @@
+.history-page {
+  padding-top: 18rpx;
+}
+
+.summary-card {
+  padding: 36rpx 32rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(140deg, #173f32, #0c8d64);
+  color: #fff;
+  box-shadow: 0 14rpx 36rpx rgba(12, 103, 75, 0.19);
+}
+
+.summary-label {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 23rpx;
+}
+
+.summary-value {
+  margin-top: 18rpx;
+  font-size: 48rpx;
+  line-height: 64rpx;
+  font-weight: 700;
+}
+
+.summary-time {
+  margin-top: 8rpx;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 22rpx;
+}
+
+.control-card {
+  padding: 26rpx;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.control-main {
+  flex: 1;
+  min-width: 0;
+  margin-right: 20rpx;
+}
+
+.control-title {
+  font-size: 28rpx;
+  font-weight: 620;
+}
+
+.control-subtitle {
+  margin-top: 8rpx;
+  color: #8d9792;
+  font-size: 22rpx;
+  line-height: 32rpx;
+}
+
+.status-pill {
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: #eef2f0;
+  color: #87918c;
+  font-size: 21rpx;
+}
+
+.status-pill.active {
+  background: #dcf3e9;
+  color: #087d59;
+}
+
+.measurement-button {
+  margin-top: 24rpx;
+  border-radius: 999rpx;
+  background: #0c9b6c;
+  color: #fff;
+  font-size: 25rpx;
+}
+
+.measurement-button.stop {
+  background: #fff0f0;
+  color: #c64b4b;
+}
+
+.history-cell {
+  display: flex;
+  min-height: 112rpx;
+  padding: 22rpx 24rpx 22rpx 12rpx;
+  box-sizing: border-box;
+}
+
+.timeline {
+  position: relative;
+  width: 48rpx;
+  flex: none;
+}
+
+.timeline-dot {
+  position: absolute;
+  top: 12rpx;
+  left: 18rpx;
+  z-index: 1;
+  width: 14rpx;
+  height: 14rpx;
+  border: 5rpx solid #d8eee5;
+  border-radius: 50%;
+  background: #0c9b6c;
+}
+
+.timeline-line {
+  position: absolute;
+  top: 34rpx;
+  bottom: -34rpx;
+  left: 29rpx;
+  width: 2rpx;
+  background: #deebe5;
+}
+
+.history-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 10rpx;
+}
+
+.history-value {
+  font-size: 30rpx;
+  font-weight: 620;
+}
+
+.history-summary {
+  margin-top: 7rpx;
+  color: #929c97;
+  font-size: 22rpx;
+}
+
+.history-time {
+  width: 190rpx;
+  margin-left: 18rpx;
+  color: #7e8984;
+  font-size: 21rpx;
+  line-height: 32rpx;
+  text-align: right;
+}
+
+.empty-orbit {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  margin: 0 auto 24rpx;
+  border: 3rpx solid #d4e5dd;
+  border-radius: 50%;
+}
+
+.empty-dot {
+  position: absolute;
+  top: 5rpx;
+  left: 50%;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #0c9b6c;
+}

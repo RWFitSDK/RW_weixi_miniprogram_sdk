@@ -1,0 +1,63 @@
+<view class="page running-page">
+  <view class="workout-hero {{isPaused ? 'paused' : ''}}">
+    <view class="hero-top">
+      <view>
+        <view class="hero-label">当前运动</view>
+        <view class="hero-title">{{typeName}}</view>
+      </view>
+      <view class="status-pill">{{statusText}}</view>
+    </view>
+    <view class="hero-time">{{timeText}}</view>
+    <view class="hero-time-label">运动时长</view>
+  </view>
+
+  <view wx:if="{{!connected}}" class="connect-tip">蓝牙已断开。设备上的运动不会自动结束，重新连接后可继续控制。</view>
+
+  <view class="metric-grid">
+    <view class="metric-card">
+      <view class="metric-value">{{stepsText}}</view>
+      <view class="metric-label">步数 · 步</view>
+    </view>
+    <view class="metric-card">
+      <view class="metric-value">{{distanceText}}</view>
+      <view class="metric-label">距离 · km</view>
+    </view>
+    <view class="metric-card">
+      <view class="metric-value">{{calorieText}}</view>
+      <view class="metric-label">热量 · kcal</view>
+    </view>
+    <view class="metric-card heart-card">
+      <view class="metric-value">{{heartRateText}}</view>
+      <view class="metric-label">心率 · bpm</view>
+    </view>
+  </view>
+
+  <view class="control-panel">
+    <button
+      wx:if="{{isRunning && !isPaused}}"
+      class="control-button pause"
+      loading="{{busy}}"
+      disabled="{{!connected || busy}}"
+      bindtap="pauseWorkout"
+    >暂停</button>
+    <button
+      wx:if="{{isRunning && isPaused}}"
+      class="control-button continue"
+      loading="{{busy}}"
+      disabled="{{!connected || busy}}"
+      bindtap="continueWorkout"
+    >继续</button>
+    <button
+      wx:if="{{isRunning}}"
+      class="control-button finish"
+      disabled="{{!connected || busy}}"
+      bindtap="finishWorkout"
+    >结束运动</button>
+    <view wx:else class="finished-text">本次运动已经结束</view>
+  </view>
+
+  <view class="notice-card">
+    <view class="notice-title">运动说明</view>
+    <view class="notice-text">离开此页面只会关闭实时数据通知，不会结束设备上的运动。运动超过 2 分钟后正常结束，设备才会保存运动报告。</view>
+  </view>
+</view>

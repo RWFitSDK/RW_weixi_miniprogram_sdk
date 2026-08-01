@@ -1,0 +1,59 @@
+<view class="page workout-page">
+  <view wx:if="{{!connected}}" class="connect-tip">设备未连接，请先在设备页连接后再开始运动。</view>
+
+  <view wx:if="{{activeWorkout}}" class="active-card" bindtap="continueWorkout">
+    <view>
+      <view class="active-label">设备正在运动</view>
+      <view class="active-title">{{activeWorkout.typeName}}</view>
+      <view class="active-status">{{activeWorkout.statusText}} · 点击进入实时数据页</view>
+    </view>
+    <view class="active-arrow">›</view>
+  </view>
+
+  <view class="section-title">选择运动<text class="section-caption">共 {{workoutTypes.length}} 项</text></view>
+  <view class="search-box">
+    <text class="search-symbol">⌕</text>
+    <input placeholder="搜索运动类型" value="{{keyword}}" bindinput="filterTypes" />
+  </view>
+
+  <view wx:if="{{workoutTypes.length}}" class="workout-grid">
+    <view
+      wx:for="{{workoutTypes}}"
+      wx:key="code"
+      class="workout-cell {{!connected ? 'disabled' : ''}}"
+      data-code="{{item.code}}"
+      bindtap="selectWorkout"
+    >
+      <view class="workout-symbol">{{item.symbol}}</view>
+      <view class="workout-name">{{item.name}}</view>
+      <view class="workout-code">{{item.code}}</view>
+    </view>
+  </view>
+  <view wx:else class="card empty-card">
+    <view class="empty-title">没有匹配的运动</view>
+    <view class="empty-text">请更换关键词后重试。</view>
+  </view>
+
+  <view class="report-heading">
+    <view class="section-title">历史报告<text class="section-caption">本地 {{reports.length}} 条</text></view>
+    <button
+      class="load-report-button"
+      loading="{{reportsLoading}}"
+      disabled="{{!connected || reportsLoading}}"
+      bindtap="loadHistoricalReports"
+    >从设备加载</button>
+  </view>
+  <view wx:if="{{reports.length}}" class="card report-list">
+    <view wx:for="{{reports}}" wx:key="id" class="report-cell">
+      <view class="report-main">
+        <view class="report-title">{{item.typeName}} · {{item.valueText}}</view>
+        <view class="report-summary">{{item.summary}}</view>
+      </view>
+      <view class="report-time">{{item.timeText}}</view>
+    </view>
+  </view>
+  <view wx:else class="card empty-card compact">
+    <view class="empty-title">暂无运动记录</view>
+    <view class="empty-text">点击“从设备加载”读取历史；运动超过 2 分钟并正常结束后，设备才会保存报告。</view>
+  </view>
+</view>

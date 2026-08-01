@@ -1,0 +1,107 @@
+page {
+  min-height: 100%;
+  background: #f4f7f5;
+  color: #18221e;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+
+button::after {
+  border: none;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 28rpx 28rpx 56rpx;
+  box-sizing: border-box;
+}
+
+.section-title {
+  margin: 38rpx 4rpx 18rpx;
+  font-size: 30rpx;
+  line-height: 42rpx;
+  font-weight: 650;
+}
+
+.section-caption {
+  margin-left: 12rpx;
+  color: #8a948f;
+  font-size: 23rpx;
+  font-weight: 400;
+}
+
+.card {
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: #fff;
+  box-shadow: 0 8rpx 30rpx rgba(25, 60, 45, 0.055);
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  min-height: 104rpx;
+  padding: 20rpx 26rpx;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.cell + .cell {
+  border-top: 1rpx solid #edf0ee;
+}
+
+.cell-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cell-title {
+  color: #1c2823;
+  font-size: 29rpx;
+  line-height: 40rpx;
+}
+
+.cell-subtitle {
+  margin-top: 5rpx;
+  color: #929c97;
+  font-size: 23rpx;
+  line-height: 32rpx;
+}
+
+.cell-value {
+  margin-left: 18rpx;
+  color: #66716c;
+  font-size: 25rpx;
+}
+
+.chevron {
+  margin-left: 14rpx;
+  color: #bdc5c1;
+  font-size: 34rpx;
+  line-height: 34rpx;
+}
+
+.empty-card {
+  padding: 72rpx 32rpx;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.empty-text {
+  margin-top: 12rpx;
+  color: #909a95;
+  font-size: 24rpx;
+  line-height: 36rpx;
+}
+
+.primary-button {
+  margin-top: 30rpx;
+  border-radius: 999rpx;
+  background: #0c9b6c;
+  color: #fff;
+  font-size: 27rpx;
+  font-weight: 550;
+}

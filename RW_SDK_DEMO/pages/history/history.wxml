@@ -1,0 +1,53 @@
+<view class="page history-page">
+  <view class="summary-card">
+    <view class="summary-label">最近一次{{title}}</view>
+    <view class="summary-value">{{latestValue}}</view>
+    <view class="summary-time">{{latestTime}}</view>
+  </view>
+
+  <view wx:if="{{supportsMeasurement}}" class="section-title">实时检测</view>
+  <view wx:if="{{supportsMeasurement}}" class="card control-card">
+    <view class="control-row">
+      <view class="control-main">
+        <view class="control-title">{{title}}实时检测</view>
+        <view class="control-subtitle">{{measuring ? '检测中，收到的数据只更新上方实时值' : '由设备开始单次实时测量'}}</view>
+      </view>
+      <view class="status-pill {{measuring ? 'active' : ''}}">{{measuring ? '检测中' : '未开始'}}</view>
+    </view>
+    <button
+      wx:if="{{!measuring}}"
+      class="measurement-button"
+      loading="{{measurementBusy}}"
+      disabled="{{!connected || measurementBusy}}"
+      bindtap="startMeasurement"
+    >开始检测</button>
+    <button
+      wx:else
+      class="measurement-button stop"
+      loading="{{measurementBusy}}"
+      disabled="{{!connected || measurementBusy}}"
+      bindtap="stopMeasurement"
+    >结束检测</button>
+  </view>
+
+  <view class="section-title">历史记录<text class="section-caption">{{historyCaption}}</text></view>
+  <view wx:if="{{records.length}}" class="card history-list">
+    <view wx:for="{{records}}" wx:key="id" class="history-cell">
+      <view class="timeline">
+        <view class="timeline-dot"></view>
+        <view wx:if="{{index < records.length - 1}}" class="timeline-line"></view>
+      </view>
+      <view class="history-main">
+        <view class="history-value">{{item.valueText}}</view>
+        <view class="history-summary">{{item.summary}}</view>
+      </view>
+      <view class="history-time">{{item.timeText}}</view>
+    </view>
+  </view>
+
+  <view wx:else class="card empty-card">
+    <view class="empty-orbit"><view class="empty-dot"></view></view>
+    <view class="empty-title">暂无{{title}}记录</view>
+    <view class="empty-text">请回到首页下拉同步，设备中的历史数据会按时间倒序显示在这里。</view>
+  </view>
+</view>

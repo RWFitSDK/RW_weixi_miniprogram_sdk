@@ -1,0 +1,82 @@
+<view class="page">
+  <view class="page-heading">
+    <view class="page-title">我的设备</view>
+    <view class="page-subtitle">管理连接、设备信息与支持功能</view>
+  </view>
+
+  <device-card
+    wx:if="{{boundDevice}}"
+    device="{{boundDevice}}"
+    connectionState="{{connectionState}}"
+  />
+
+  <view wx:else class="unbound-device" bindtap="openSearch">
+    <view class="unbound-icon">+</view>
+    <view class="unbound-main">
+      <view class="unbound-title">未绑定设备</view>
+      <view class="unbound-text">点击搜索并连接智能戒指</view>
+    </view>
+    <text class="chevron">›</text>
+  </view>
+
+  <block wx:if="{{boundDevice}}">
+    <view class="connection-actions">
+      <button wx:if="{{!connected}}" class="connect-button" loading="{{busy}}" bindtap="reconnect">重新连接</button>
+      <button wx:else class="outline-button" bindtap="disconnect">断开连接</button>
+      <button class="danger-button" bindtap="unbind">解除绑定</button>
+    </view>
+
+    <view class="section-title">设备信息</view>
+    <view class="card">
+      <view class="cell" bindtap="refreshPower">
+        <view class="cell-main"><view class="cell-title">设备电量</view><view class="cell-subtitle">点击刷新</view></view>
+        <text class="cell-value">{{powerText}}</text><text class="chevron">›</text>
+      </view>
+      <view class="cell">
+        <view class="cell-main"><view class="cell-title">设备型号</view></view>
+        <text class="cell-value">{{modelText}}</text>
+      </view>
+      <view class="cell">
+        <view class="cell-main"><view class="cell-title">固件版本</view></view>
+        <text class="cell-value">{{firmwareText}}</text>
+      </view>
+      <view class="cell" bindtap="openFirmwareUpgrade">
+        <view class="cell-main">
+          <view class="cell-title">固件升级</view>
+          <view class="cell-subtitle">从微信聊天导入厂家固件</view>
+        </view>
+        <text class="cell-value support-value">{{connected ? '可操作' : '需连接'}}</text>
+        <text class="chevron">›</text>
+      </view>
+    </view>
+
+    <view class="section-title">设备功能<text class="section-caption">按功能表显示</text></view>
+    <view wx:if="{{settings.length}}" class="card">
+      <view
+        wx:for="{{settings}}"
+        wx:key="id"
+        class="cell"
+        data-id="{{item.id}}"
+        bindtap="tapSetting"
+      >
+        <view class="setting-symbol">{{item.symbol}}</view>
+        <view class="cell-main">
+          <view class="cell-title">{{item.title}}</view>
+          <view class="cell-subtitle">{{item.subtitle}}</view>
+        </view>
+        <text wx:if="{{item.valueText}}" class="cell-value support-value">{{item.valueText}}</text>
+        <text class="chevron">›</text>
+      </view>
+    </view>
+    <view wx:else class="card empty-card feature-empty">
+      <view class="empty-title">暂无可配置功能</view>
+      <view class="empty-text">设备功能表未声明可配置项，重新连接后可再次获取。</view>
+    </view>
+  </block>
+
+  <view wx:else class="card empty-card device-empty">
+    <view class="empty-title">还没有绑定戒指</view>
+    <view class="empty-text">绑定后这里会根据功能配置表展示设备支持的全部设置。</view>
+    <button class="primary-button" bindtap="openSearch">搜索设备</button>
+  </view>
+</view>

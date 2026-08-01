@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+*.log
+
+# 编辑器配置
+.idea/
+.vscode/

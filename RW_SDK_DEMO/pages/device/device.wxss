@@ -1,0 +1,110 @@
+.page-heading {
+  padding: 10rpx 4rpx 30rpx;
+}
+
+.page-title {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.page-subtitle {
+  margin-top: 8rpx;
+  color: #87928d;
+  font-size: 24rpx;
+}
+
+.unbound-device {
+  display: flex;
+  align-items: center;
+  min-height: 142rpx;
+  padding: 28rpx;
+  box-sizing: border-box;
+  border: 2rpx dashed #bdc9c3;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.unbound-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #e2f3ec;
+  color: #0c9b6c;
+  font-size: 42rpx;
+  font-weight: 300;
+}
+
+.unbound-main {
+  flex: 1;
+  margin-left: 24rpx;
+}
+
+.unbound-title {
+  font-size: 30rpx;
+  font-weight: 620;
+}
+
+.unbound-text {
+  margin-top: 7rpx;
+  color: #8e9893;
+  font-size: 23rpx;
+}
+
+.connection-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.connection-actions button {
+  flex: 1;
+  margin: 0;
+  border-radius: 999rpx;
+  font-size: 25rpx;
+}
+
+.connect-button {
+  background: #0c9b6c;
+  color: #fff;
+}
+
+.outline-button {
+  background: #e4f2ec;
+  color: #087e59;
+}
+
+.danger-button {
+  background: #fff0f0;
+  color: #c64b4b;
+}
+
+.setting-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  flex: none;
+  margin-right: 20rpx;
+  border-radius: 17rpx;
+  background: #edf6f2;
+  color: #168662;
+  font-size: 23rpx;
+  font-weight: 650;
+}
+
+.support-value {
+  color: #0c9568;
+}
+
+.device-empty {
+  margin-top: 34rpx;
+}
+
+.feature-empty {
+  padding-top: 48rpx;
+  padding-bottom: 48rpx;
+}

@@ -1,0 +1,63 @@
+<view class="page home-page">
+  <view class="hero">
+    <view>
+      <view class="hero-title">今天感觉怎么样？</view>
+      <view class="hero-subtitle">连接戒指，查看你的健康趋势</view>
+    </view>
+    <view class="hero-mark">RW</view>
+  </view>
+
+  <device-card
+    wx:if="{{boundDevice}}"
+    device="{{boundDevice}}"
+    connectionState="{{connectionState}}"
+    bindselect="openDevice"
+  />
+
+  <view wx:else class="unbound-card" bindtap="openSearch">
+    <view class="unbound-icon">+</view>
+    <view class="unbound-content">
+      <view class="unbound-title">未绑定设备</view>
+      <view class="unbound-subtitle">点击搜索并连接 RW 智能戒指</view>
+    </view>
+    <text class="unbound-arrow">›</text>
+  </view>
+
+  <view class="section-title">
+    健康数据
+    <text class="section-caption" wx:if="{{boundDevice}}">{{lastSyncText}}</text>
+  </view>
+
+  <view wx:if="{{healthSyncing}}" class="sync-progress">
+    <view class="sync-progress-bar" style="width: {{healthSyncProgress}}%"></view>
+  </view>
+
+  <view wx:if="{{healthCards.length}}" class="health-grid">
+    <view
+      wx:for="{{healthCards}}"
+      wx:key="type"
+      class="health-card"
+      data-type="{{item.type}}"
+      bindtap="openHistory"
+    >
+      <view class="health-top">
+        <view class="health-icon">{{item.icon}}</view>
+        <text class="health-arrow">›</text>
+      </view>
+      <view class="health-title">{{item.title}}</view>
+      <view class="health-value">{{item.valueText}}</view>
+      <view class="health-time">{{item.timeText}}</view>
+    </view>
+  </view>
+
+  <view wx:elif="{{boundDevice}}" class="card empty-card">
+    <view class="empty-title">暂未获得健康能力</view>
+    <view class="empty-text">请先在设备页重新连接，获取设备功能配置表。</view>
+  </view>
+
+  <view wx:else class="card empty-card">
+    <view class="empty-title">绑定后显示健康数据</view>
+    <view class="empty-text">首页会根据设备功能表展示计步、心率、睡眠、多运动等支持项目。</view>
+    <button class="primary-button" bindtap="openSearch">添加设备</button>
+  </view>
+</view>
