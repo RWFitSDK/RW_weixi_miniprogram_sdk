@@ -911,7 +911,7 @@ const reports = await sdk.getWorkoutReports();
 | PPG/ACC/PPG Red/IR | 启动采集后同步历史数据 |
 | 睡眠状态 | 设备实时推送 |
 
-原始数据最高可达 100Hz，设备通常只保存约 1 分钟。采样点没有独立绝对时间戳。
+原始数据设备通常只保存约 1 分钟。采样点没有独立绝对时间戳。
 
 历史采集 `sensorType`：
 
