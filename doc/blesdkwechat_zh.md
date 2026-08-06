@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260724`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20260806`。
 
 #### 1.1 适用平台与语言
 
@@ -187,7 +187,7 @@ const latestMenu = await sdk.readFunctionList();
 ##### 3.2.1.1 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260724"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260806"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -1000,6 +1000,10 @@ const off = sdk.onDeviceEvent((event) => {
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20260806** (2026.08.06)
+- 优化健康数据与传感器历史数据同步
+- Demo 增加 PPG 原始数据采集与历史获取
 
 **RW_SDK_V2.0.0_20260724** (2026.07.24)
 - 微信小程序基本功能

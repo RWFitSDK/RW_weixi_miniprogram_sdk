@@ -1,5 +1,6 @@
 const bleManager = require("../../services/bleManager");
 const { getSettings } = require("../../utils/capabilities");
+const { SensorRawControl } = require("../../sdk/rw-ble-sdk.min.js");
 
 function choose(itemList) {
   return new Promise((resolve) => {
@@ -91,7 +92,10 @@ Page({
 
   onLoad() {
     this.settingValues = {};
-    this.unsubscribe = bleManager.subscribe((state) => this.applyState(state));
+    this.unsubscribe = bleManager.subscribe((state) => {
+      this.applyState(state);
+      this.bindDeviceEvent();
+    });
   },
 
   onShow() {
@@ -100,6 +104,24 @@ Page({
 
   onUnload() {
     if (this.unsubscribe) this.unsubscribe();
+    if (this.deviceEventUnsubscribe) this.deviceEventUnsubscribe();
+    this.deviceEventUnsubscribe = null;
+    this.deviceEventSdk = null;
+  },
+
+  bindDeviceEvent() {
+    const sdk = bleManager.getSdk();
+    if (this.deviceEventSdk === sdk) return;
+    if (this.deviceEventUnsubscribe) this.deviceEventUnsubscribe();
+    this.deviceEventUnsubscribe = null;
+    this.deviceEventSdk = sdk;
+    if (!sdk) return;
+    this.deviceEventUnsubscribe = sdk.onDeviceEvent((event) => {
+      console.log("onDeviceEvent", event);
+      if (event.type !== "sensorStopped") return;
+      console.log("device stopped sensor", event.reason);
+      this.updateSettingValue("sensorRawPPG", "采集完成");
+    });
   },
 
   applyState(state) {
@@ -232,6 +254,7 @@ Page({
       return;
     }
     if (id === "alarm") return this.editAlarm(sdk);
+    if (id === "sensorRawPPG") return this.manageSensorRawPpg(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
 
     const operations = {
@@ -335,6 +358,46 @@ Page({
     await operation.run(operation.values[index]);
     this.updateSettingValue(id, operation.labels[index]);
     wx.showToast({ title: "设置成功", icon: "success" });
+  },
+
+  async manageSensorRawPpg(sdk) {
+    const action = await choose(["启动 PPG", "停止 PPG", "获取 PPG 历史"]);
+    if (action === null) return;
+    if (action === 0 || action === 1) {
+      const started = action === 0;
+      if (!started) this.updateSettingValue("sensorRawPPG", "停止中");
+      await sdk.controlSensorRaw(
+        started ? SensorRawControl.START : SensorRawControl.STOP,
+        2,
+      );
+      if (started) this.updateSettingValue("sensorRawPPG", "采集中");
+      wx.showToast({ title: started ? "PPG 已启动" : "停止指令已发送", icon: "success" });
+      return;
+    }
+
+    if (this.sensorHistoryLoading) return;
+    this.sensorHistoryLoading = true;
+    wx.showLoading({ title: "读取历史中", mask: true });
+    try {
+      const records = await sdk.getSensorHistoryRaw();
+      const ppgRecords = records.filter((record) => record.type === 1);
+      const sampleCount = ppgRecords.reduce(
+        (total, record) => total + (record.ppgDataList ? record.ppgDataList.length : 0),
+        0,
+      );
+      this.updateSettingValue("sensorRawPPG", `${ppgRecords.length} 组 · ${sampleCount} 点`);
+      wx.showModal({
+        title: "PPG 历史数据",
+        content: ppgRecords.length
+          ? `获取 ${ppgRecords.length} 组，共 ${sampleCount} 个采样点。`
+          : "设备中暂无 PPG 历史数据。",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+    } finally {
+      wx.hideLoading();
+      this.sensorHistoryLoading = false;
+    }
   },
 
   async editAlarm(sdk) {

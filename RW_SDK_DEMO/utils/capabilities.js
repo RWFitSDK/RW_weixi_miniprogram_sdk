@@ -58,6 +58,12 @@ const SETTING_TYPES = [
     support: (m) => m.supportTemperatureMonitoring || m.temperature,
   },
   { id: "ppgMonitoring", title: "PPG 定时监测", subtitle: "设置 PPG 定时监测", support: (m) => m.supportPPGMonitoring },
+  {
+    id: "sensorRawPPG",
+    title: "PPG 原始数据",
+    subtitle: "启动、停止采集或获取历史数据",
+    support: (m) => m.supportSensorRawPPG || m.isSupportSensorRawPPG,
+  },
   { id: "heartRateAlert", title: "心率报警", subtitle: "设置心率上下限", support: (m) => m.supportHrReminder },
   { id: "bloodOxygenAlert", title: "血氧报警", subtitle: "设置血氧下限", support: (m) => m.supportBoReminder },
   { id: "vibrationCount", title: "震动次数", subtitle: "设置提醒震动次数", support: (m) => m.supportMotoVibrationLevel },

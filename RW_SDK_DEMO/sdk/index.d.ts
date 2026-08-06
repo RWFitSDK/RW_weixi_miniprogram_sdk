@@ -293,7 +293,7 @@ export interface SyncAllHealthResult {
 	errors: Partial<Record<HealthDataType, string>>;
 }
 export type DeviceEventHandler = (event: DeviceEvent) => void;
-export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260724";
+export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260806";
 /** 获取当前 SDK 版本号。 */
 export declare function getSDKVersion(): string;
 export type RingSdkConnectionStage = "connecting" | "initializing" | "ready";
