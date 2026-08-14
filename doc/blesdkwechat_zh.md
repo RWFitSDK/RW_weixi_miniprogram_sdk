@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260806`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20260807`。
 
 #### 1.1 适用平台与语言
 
@@ -102,6 +102,8 @@ console.log("是否支持心率", supportMenu.hr);
 
 `RingSdk.connect()` 的 Promise 只在进入 `ready` 后返回。成功返回后，可直接通过 `sdk.supportMenu` 获取本次连接已经读取的功能表，不需要再次请求设备；需要主动刷新功能表时才调用 `await sdk.readFunctionList()`。
 
+支持设备密码认证的设备会在初始化期间自动校验预置密码，认证成功后才进入 `ready`；不支持该功能的设备保持原连接流程不变。设备明确返回认证失败时，连接 Promise 抛出 `RingSdkConnectionError`，其 `reason` 为 `PASSWORD_AUTH_FAILED`，SDK 同时关闭本次 BLE 连接。BLE 写入失败和指令超时继续沿用原有错误，不转换为密码认证错误。
+
 `onConnectionStateChange` 是可选的页面状态回调：进入 `ready` 时返回 `connected: true`，设备断开时返回 `connected: false`。连接失败会抛出 `RingSdkConnectionError`，其中包含 `errCode` 和 `detail`，不会进入 `ready`。
 
 建议根据 `errCode` 向用户提供对应提示和操作：
@@ -119,6 +121,7 @@ console.log("是否支持心率", supportMenu.hr);
 | `10009` | 提示当前手机或微信版本不支持所需蓝牙能力 |
 | `10012` | 提示操作超时并允许重试 |
 | `10013` | 提示蓝牙参数或设备数据无效，检查参数后重试 |
+| `reason: PASSWORD_AUTH_FAILED` | 提示设备密码不匹配，不能进入业务可用状态 |
 
 ##### 3.1.4 断开连接设备
 
@@ -141,7 +144,7 @@ wx.setStorageSync("boundDevice", {
 });
 ```
 
-小程序启动后可读取缓存并调用 `RingSdk.connect(deviceId)` 重连。解绑时先调用 `sdk.disconnect()`，再删除缓存。iOS 的 `deviceId` 由微信提供，不要自行当作 MAC 地址解析；应同时保存广播解析或设备指令返回的 BLE MAC。
+小程序启动后可读取缓存并调用 `RingSdk.connect(deviceId)` 重连。对于支持设备密码认证的设备，解绑必须在设备保持连接时先调用 `await sdk.modifyDevicePwd("0000")`，成功后再断开设备并删除缓存；不支持该功能的设备保持原解绑流程。iOS 的 `deviceId` 由微信提供，不要自行当作 MAC 地址解析；应同时保存广播解析或设备指令返回的 BLE MAC。
 
 **iOS 解绑必须提示用户解除系统配对。** 小程序无法直接删除 iOS 保存的蓝牙配对关系。完成应用内解绑后，必须弹出明确提示，引导用户前往“系统设置 → 蓝牙”，找到对应设备并选择“忽略此设备”。支持 `wx.openSystemBluetoothSetting()` 时，应提供直接进入系统蓝牙设置的入口。
 
@@ -177,6 +180,7 @@ const latestMenu = await sdk.readFunctionList();
 | `supportPPGMonitoring` | PPG 定时监测 |
 | `supportTemperatureMonitoring` | 体温定时监测 |
 | `supportFallDetect` | 跌落提醒 |
+| `supportDevicePasswordAuth` | 设备密码认证 |
 
 调用相关接口前应先判断相应功能位。
 
@@ -187,7 +191,7 @@ const latestMenu = await sdk.readFunctionList();
 ##### 3.2.1.1 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260806"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260807"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -484,6 +488,27 @@ const minutes = await sdk.getCountReminderInterval();
 await sdk.setCountReminderInterval(60); // 0/30/60/90/120
 await sdk.setCountReminderInterval(0);  // 关闭
 ```
+
+##### 3.2.1.26 设备密码认证
+
+功能位：`supportDevicePasswordAuth`。设备密码固定为4位数字，空值按默认密码 `0000` 处理。
+
+###### 3.2.1.26.1 准备自动认证密码
+
+```js
+RingSdk.prepareAutoPassword("1234");
+const sdk = await RingSdk.connect(deviceId);
+```
+
+该方法只保存后续连接使用的密码，不会立即向设备发送指令。支持密码认证的设备会在连接初始化期间自动认证，成功后 `connect()` 才返回；不支持该功能的设备会跳过认证。
+
+###### 3.2.1.26.2 修改设备密码
+
+```js
+await sdk.modifyDevicePwd("0000");
+```
+
+设备必须已连接并完成密码认证。正常解绑时将密码修改为 `0000`，等待设备返回成功后再断开连接及清除本地绑定记录。
 
 #### 3.2.2 健康数据同步（实时单次与全天检测）
 
@@ -911,7 +936,7 @@ const reports = await sdk.getWorkoutReports();
 | PPG/ACC/PPG Red/IR | 启动采集后同步历史数据 |
 | 睡眠状态 | 设备实时推送 |
 
-原始数据设备通常只保存约 1 分钟。采样点没有独立绝对时间戳。
+原始数据最高可达 100Hz，设备通常只保存约 1 分钟。采样点没有独立绝对时间戳。
 
 历史采集 `sensorType`：
 
@@ -1000,6 +1025,9 @@ const off = sdk.onDeviceEvent((event) => {
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ## SDK修订记录
+
+**v2.0.0_20260807** (2026.08.07)
+- 添加设备密码认证功能
 
 **RW_SDK_V2.0.0_20260806** (2026.08.06)
 - 优化健康数据与传感器历史数据同步

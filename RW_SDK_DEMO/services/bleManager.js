@@ -4,6 +4,8 @@ const { getWorkoutTypeName, formatWorkoutDuration } = require("../utils/workout"
 
 const SCAN_TIMEOUT_MS = 10000;
 const HEALTH_MEASUREMENT_TIMEOUT_MS = 120000;
+// 仅用于演示设备密码认证；实际项目应由登录业务在每次连接前提供当前用户密码。
+const DEMO_DEVICE_PASSWORD = "1234";
 
 const WX_BLE_MESSAGES = {
   10000: { code: "ADAPTER_NOT_INITIALIZED", message: "蓝牙尚未初始化，请稍后重试" },
@@ -33,7 +35,11 @@ function createBleError(error, stage) {
   const errCode = error && typeof error.errCode === "number" ? error.errCode : undefined;
   const errMsg = error && error.errMsg ? error.errMsg : error && error.message ? error.message : "微信蓝牙接口调用失败";
   const lowerMessage = String(errMsg).toLowerCase();
+  const reason = error && error.reason ? error.reason : "";
   let mapped = errCode === undefined ? null : WX_BLE_MESSAGES[errCode];
+  if (reason === "PASSWORD_AUTH_FAILED") {
+    mapped = { code: "PASSWORD_AUTH_FAILED", message: "设备密码认证失败；Demo 默认演示密码为 1234" };
+  }
   if (!mapped && (lowerMessage.includes("auth") || lowerMessage.includes("permission") || lowerMessage.includes("authorize"))) {
     mapped = { code: "PERMISSION_DENIED", message: "微信蓝牙权限未开启，请在小程序设置中允许后重试", action: "openSetting" };
   }
@@ -47,6 +53,7 @@ function createBleError(error, stage) {
   return new BleClientError({
     code: mapped.code,
     stage,
+    reason,
     errCode,
     detail: errMsg,
     message: mapped.message,
@@ -288,6 +295,7 @@ class BleManager {
     this.log(`正在连接 ${target.name || target.deviceId}`);
 
     try {
+      RingSdk.prepareAutoPassword(DEMO_DEVICE_PASSWORD);
       this.sdk = await RingSdk.connect(target.deviceId, {
         onConnectionStateChange: ({ deviceId, connected }) => {
           if (connected || deviceId !== this.activeDeviceId) return;
@@ -310,6 +318,11 @@ class BleManager {
             this.log(
               `功能表 payload[37]=${ppg.rawHex}，PPG(bit0)=${ppg.bit0 ? 1 : 0}，体温(bit1)=${ppg.temperatureBit1 ? 1 : 0}`,
             );
+            if (detail.passwordAuth) {
+              this.log(
+                `密码认证功能位 payload[44]=${detail.passwordAuth.rawHex}，Auth(bit0)=${detail.passwordAuth.bit0 ? 1 : 0}`,
+              );
+            }
             if (detail.healthData) {
               this.log(
                 `健康功能表 总开关[83]=${detail.healthData.allSwitch.rawByte}，血糖[92]=${detail.healthData.bloodSugar.rawByte}，体温[94]=${detail.healthData.temperature.rawByte}`,
@@ -394,8 +407,8 @@ class BleManager {
   }
 
   async unbind() {
-    await this.disconnect();
     const previous = this.state.boundDevice;
+    await this.disconnect();
     storage.clearBoundDevice();
     if (previous) storage.clearDeviceHealthRecords(previous.deviceId);
     this.activeDeviceId = "";

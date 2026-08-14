@@ -180,9 +180,13 @@ Page({
       confirmColor: "#d84b4b",
       success: async (result) => {
         if (!result.confirm) return;
-        await bleManager.unbind();
-        if (isIos()) promptIosUnpair();
-        else wx.showToast({ title: "已解除绑定", icon: "success" });
+        try {
+          await bleManager.unbind();
+          if (isIos()) promptIosUnpair();
+          else wx.showToast({ title: "已解除绑定", icon: "success" });
+        } catch (error) {
+          bleManager.presentError(error, "解除绑定失败");
+        }
       }
     });
   },
@@ -451,15 +455,13 @@ Page({
     const factoryReset = action === 1;
     const confirmed = await confirmAction(
       factoryReset ? "恢复出厂设置" : "设备关机",
-      factoryReset ? "设备数据和 Demo 本地绑定都会被清除，此操作不可撤销。" : "确定让设备关机吗？",
+      factoryReset ? "设备数据将被清除，此操作不可撤销。" : "确定让设备关机吗？",
       factoryReset ? "恢复出厂" : "关机",
     );
     if (!confirmed) return;
     await sdk.setPowerControl(factoryReset ? 2 : 1);
     if (factoryReset) {
-      await bleManager.unbind();
-      if (isIos()) promptIosUnpair();
-      else wx.showToast({ title: "已恢复出厂", icon: "success" });
+      wx.showToast({ title: "恢复出厂指令已发送", icon: "success" });
       return;
     }
     wx.showToast({ title: "关机指令已发送", icon: "success" });

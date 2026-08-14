@@ -53,6 +53,7 @@ export interface SupportMenu {
 	supportPPGMonitoring: boolean;
 	supportTemperatureMonitoring: boolean;
 	supportRecording: boolean;
+	supportDevicePasswordAuth: boolean;
 	activityDataInterval: number;
 	healthDataSwitchEnabled: boolean;
 	step: boolean;
@@ -293,11 +294,12 @@ export interface SyncAllHealthResult {
 	errors: Partial<Record<HealthDataType, string>>;
 }
 export type DeviceEventHandler = (event: DeviceEvent) => void;
-export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260806";
+export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260807";
 /** 获取当前 SDK 版本号。 */
 export declare function getSDKVersion(): string;
 export type RingSdkConnectionStage = "connecting" | "initializing" | "ready";
 export type RingSdkErrorStage = "scan" | "connect" | "initialize" | "disconnect";
+export type RingSdkConnectionFailureReason = "PASSWORD_AUTH_FAILED";
 export interface RingSdkConnectionState {
 	deviceId: string;
 	connected: boolean;
@@ -343,10 +345,11 @@ export interface RingSdkScanSession {
 }
 export declare class RingSdkConnectionError extends Error {
 	readonly stage: RingSdkErrorStage;
+	readonly reason?: RingSdkConnectionFailureReason | undefined;
 	readonly name = "RingSdkConnectionError";
 	readonly errCode?: number;
 	readonly detail: string;
-	constructor(stage: RingSdkErrorStage, cause: unknown);
+	constructor(stage: RingSdkErrorStage, cause: unknown, reason?: RingSdkConnectionFailureReason | undefined);
 }
 /**
  * 微信小程序 BLE SDK 高层入口。
@@ -364,6 +367,11 @@ export declare class RingSdk {
 	readPower(): Promise<PowerInfo>;
 	readFirmwareVersion(): Promise<FirmwareInfo | null>;
 	readFunctionList(): Promise<SupportMenu | null>;
+	/**
+	 * 修改设备密码。正常解绑前应先修改为0000，并在成功后再清除本地绑定。
+	 * 注：RingSdk 子类会在成功后同步自动认证密码，保证下次重连用新密码认证。
+	 */
+	modifyDevicePwd(password?: string | null): Promise<void>;
 	setTime(): Promise<void>;
 	readBleAddress(): Promise<string>;
 	setUserProfile(profile: UserProfile): Promise<void>;
@@ -423,6 +431,8 @@ export declare class RingSdk {
 	 */
 	syncAllHealthData(options?: SyncAllHealthOptions): Promise<SyncAllHealthResult>;
 	readonly deviceId: string;
+	/** 设置后续连接自动认证使用的密码；空值按默认密码0000处理。 */
+	static prepareAutoPassword(password?: string | null): void;
 	static connect(deviceId: string, options?: RingSdkConnectOptions): Promise<RingSdk>;
 	/** 搜索设备；iOS 系统当前保持连接的设备会一同返回。 */
 	static startScan(options?: RingSdkScanOptions): Promise<RingSdkScanSession>;
@@ -431,6 +441,8 @@ export declare class RingSdk {
 	dispose(reason?: string): void;
 	/** 监听 SDK 连接状态；订阅后会立即返回当前状态。 */
 	onConnectionStateChange(handler: RingSdkConnectionStateHandler): () => void;
+	/** 修改设备密码；成功后同步自动认证密码，保证下次重连用新密码认证（对齐iOS）。 */
+	modifyDevicePwd(password?: string | null): Promise<void>;
 }
 export declare const HealthMeasurementType: {
 	readonly HEART_RATE: 3;
