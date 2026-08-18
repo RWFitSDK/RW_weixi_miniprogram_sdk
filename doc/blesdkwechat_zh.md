@@ -759,10 +759,71 @@ console.log(result.errors);  // 单项失败不阻断其他类型
 
 > OTA 文件必须由设备厂家提供，并确认适用于当前设备。升级期间需保持小程序前台运行、蓝牙开启并让设备靠近手机。发布前必须使用目标设备验证升级成功、异常固件拒绝和中途断连等情况。
 
+##### 3.2.3.1 获取可用固件
+
+可通过以下接口查询指定设备型号的可用固件列表：
+
+```http
+GET https://ruiwo168.com/api/device/getOtaListByModel?model=<deviceModel>
+```
+
+查询参数 `model` 对应 `readFirmwareVersion()` 返回的 `FirmwareInfo.deviceModel`。请求前应先读取设备固件信息，并使用设备实际返回的 `deviceModel` 作为 `model`：
+
+```js
+const firmware = await sdk.readFirmwareVersion();
+if (!firmware || !firmware.deviceModel) {
+  throw new Error("未读取到设备型号");
+}
+
+const result = await new Promise((resolve, reject) => {
+  wx.request({
+    url: "https://ruiwo168.com/api/device/getOtaListByModel",
+    data: { model: firmware.deviceModel },
+    success: ({ data }) => resolve(data),
+    fail: reject,
+  });
+});
+
+console.log("当前版本", firmware.version);
+console.log("可用固件", result.data || []);
+```
+
+接口返回示例：
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "data": [
+    {
+      "deviceModel": "DEVICE_MODEL",
+      "toVersion": "X.Y.Z",
+      "size": 123456,
+      "downloadUrl": "https://example.com/path/firmware.bin"
+    }
+  ]
+}
+```
+
+OTA 流程只需关注 `data` 中的以下字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `deviceModel` | String | 固件适用的设备型号，必须与 `FirmwareInfo.deviceModel` 完全一致 |
+| `toVersion` | String | 目标固件版本，正式发布时用于判断是否有更高版本可升级 |
+| `size` | Number | 固件文件大小，单位为字节（Byte） |
+| `downloadUrl` | String | 固件文件下载地址 |
+
+正式发布时，应按 `X.Y.Z` 各段数值比较当前版本 `FirmwareInfo.version` 与目标版本 `toVersion`，不能直接按字符串比较。测试时可在确认设备型号和固件包正确的前提下，执行同版本升级或降级测试。
+
+使用 `wx.request()` 和 `wx.downloadFile()` 前，需要在微信公众平台配置对应的 request、downloadFile 合法域名。如使用自有服务器，请自行维护设备型号、版本号与固件包之间的对应关系。
+
+##### 3.2.3.2 执行 OTA 升级
+
 固件文件可通过以下方式获取：
 
 - 使用 `wx.chooseMessageFile()` 从微信聊天或文件传输助手选择。
-- 由服务器配置固件版本和下载地址，通过 `wx.downloadFile()` 下载。
+- 使用上述接口或自有服务器获取下载地址，再通过 `wx.downloadFile()` 下载。
 
 无论使用哪种方式，升级前都必须核对当前设备型号和固件版本，确认固件适用于当前设备。
 
