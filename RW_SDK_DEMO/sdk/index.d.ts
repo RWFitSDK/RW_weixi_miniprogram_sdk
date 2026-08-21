@@ -54,6 +54,7 @@ export interface SupportMenu {
 	supportTemperatureMonitoring: boolean;
 	supportRecording: boolean;
 	supportDevicePasswordAuth: boolean;
+	supportScreenControl: boolean;
 	activityDataInterval: number;
 	healthDataSwitchEnabled: boolean;
 	step: boolean;
@@ -294,7 +295,7 @@ export interface SyncAllHealthResult {
 	errors: Partial<Record<HealthDataType, string>>;
 }
 export type DeviceEventHandler = (event: DeviceEvent) => void;
-export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260807";
+export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260820";
 /** 获取当前 SDK 版本号。 */
 export declare function getSDKVersion(): string;
 export type RingSdkConnectionStage = "connecting" | "initializing" | "ready";
@@ -373,6 +374,11 @@ export declare class RingSdk {
 	 */
 	modifyDevicePwd(password?: string | null): Promise<void>;
 	setTime(): Promise<void>;
+	/**
+	 * 设置自定义设备时间，仅建议用于调试或演示。SDK每次连接初始化时仍会自动同步手机时间。
+	 * @param targetTime Unix 毫秒时间戳，按手机当前时区转换为设备显示时间。
+	 */
+	setDeviceTime(targetTime: number): Promise<void>;
 	readBleAddress(): Promise<string>;
 	setUserProfile(profile: UserProfile): Promise<void>;
 	setMonitoring(type: MonitoringType, schedule: MonitorSchedule): Promise<void>;
@@ -418,6 +424,8 @@ export declare class RingSdk {
 	getAlarmVibrationDuration(): Promise<number>;
 	setVibrationInterval(intervalMs: number): Promise<void>;
 	getVibrationInterval(): Promise<number>;
+	setScreenOn(isOn: boolean): Promise<void>;
+	getScreenOn(): Promise<boolean>;
 	startFactoryTest(testMode: number): Promise<void>;
 	getWorkoutState(): Promise<WorkoutState>;
 	controlWorkout(sportType: number, status: 1 | 2 | 3 | 4): Promise<void>;
@@ -433,6 +441,8 @@ export declare class RingSdk {
 	readonly deviceId: string;
 	/** 设置后续连接自动认证使用的密码；空值按默认密码0000处理。 */
 	static prepareAutoPassword(password?: string | null): void;
+	/** 授权下一次连接重置设备密码；调用方应先在业务层完成重置资格校验。 */
+	static preparePasswordReset(targetPassword?: string | null): void;
 	static connect(deviceId: string, options?: RingSdkConnectOptions): Promise<RingSdk>;
 	/** 搜索设备；iOS 系统当前保持连接的设备会一同返回。 */
 	static startScan(options?: RingSdkScanOptions): Promise<RingSdkScanSession>;

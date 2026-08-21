@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260807`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20260820`。
 
 #### 1.1 适用平台与语言
 
@@ -181,6 +181,7 @@ const latestMenu = await sdk.readFunctionList();
 | `supportTemperatureMonitoring` | 体温定时监测 |
 | `supportFallDetect` | 跌落提醒 |
 | `supportDevicePasswordAuth` | 设备密码认证 |
+| `supportScreenControl` | 即时屏幕亮灭控制 |
 
 调用相关接口前应先判断相应功能位。
 
@@ -191,7 +192,7 @@ const latestMenu = await sdk.readFunctionList();
 ##### 3.2.1.1 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260807"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260820"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -509,6 +510,24 @@ await sdk.modifyDevicePwd("0000");
 ```
 
 设备必须已连接并完成密码认证。正常解绑时将密码修改为 `0000`，等待设备返回成功后再断开连接及清除本地绑定记录。
+
+###### 3.2.1.26.3 准备授权密码重置
+
+```js
+RingSdk.preparePasswordReset("1234");
+const sdk = await RingSdk.connect(deviceId);
+```
+
+当业务层已通过可靠方式确认用户具备密码重置资格时，可在连接前调用该方法。SDK会在下一次连接中将设备密码重置为传入密码；重置成功后，该密码会自动用于后续正常连接认证。该授权只对下一次连接有效。
+
+##### 3.2.1.27 即时屏幕控制
+
+功能位：`supportScreenControl`。仅支持该能力的设备可使用。
+
+```js
+await sdk.setScreenOn(true);  // 亮屏
+await sdk.setScreenOn(false); // 息屏
+```
 
 #### 3.2.2 健康数据同步（实时单次与全天检测）
 
@@ -1087,7 +1106,13 @@ const off = sdk.onDeviceEvent((event) => {
 
 ## SDK修订记录
 
-**v2.0.0_20260807** (2026.08.07)
+**RW_SDK_V2.0.0_20260820** (2026.08.20)
+- 添加即时屏幕控制功能(3.2.1.27)
+- 添加调试、测试用自定义设备时间设置接口 `setDeviceTime`
+- 添加授权密码重置功能（3.2.1.26.3）
+- 补充获取可用固件及OTA型号、版本校验说明(3.2.3.1)
+
+**RW_SDK_V2.0.0_20260807** (2026.08.07)
 - 添加设备密码认证功能
 
 **RW_SDK_V2.0.0_20260806** (2026.08.06)

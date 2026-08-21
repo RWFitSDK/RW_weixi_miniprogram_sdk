@@ -40,6 +40,7 @@ const SETTING_TYPES = [
   { id: "dnd", title: "勿扰模式", subtitle: "设置勿扰开关与时段", support: (m) => m.dnd },
   { id: "screenSleep", title: "屏幕睡眠", subtitle: "设置屏幕睡眠时段", support: (m) => m.brightScreenSleepTime },
   { id: "brightDuration", title: "亮屏时长", subtitle: "设置屏幕保持点亮时间", support: (m) => m.brightScreenTime },
+  { id: "screenControl", title: "即时屏幕控制", subtitle: "亮屏、息屏或查询当前状态", support: (m) => m.supportScreenControl },
   { id: "raiseToWake", title: "抬腕亮屏", subtitle: "设置开关与生效时段", support: (m) => m.raiseBrightScreen },
   { id: "ledLevel", title: "LED 亮度", subtitle: "设置 LED 开关与亮度", support: (m) => m.ledLight },
   { id: "wearHand", title: "佩戴位置", subtitle: "左手或右手佩戴", support: (m) => m.wearDir },
@@ -55,7 +56,7 @@ const SETTING_TYPES = [
     id: "temperatureMonitoring",
     title: "全天体温",
     subtitle: "设置全天体温监测",
-    support: (m) => m.supportTemperatureMonitoring || m.temperature,
+    support: (m) => m.supportTemperatureMonitoring,
   },
   { id: "ppgMonitoring", title: "PPG 定时监测", subtitle: "设置 PPG 定时监测", support: (m) => m.supportPPGMonitoring },
   {

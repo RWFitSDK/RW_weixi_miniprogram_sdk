@@ -259,6 +259,7 @@ Page({
     }
     if (id === "alarm") return this.editAlarm(sdk);
     if (id === "sensorRawPPG") return this.manageSensorRawPpg(sdk);
+    if (id === "screenControl") return this.manageScreenControl(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
 
     const operations = {
@@ -361,6 +362,22 @@ Page({
     if (index === null) return;
     await operation.run(operation.values[index]);
     this.updateSettingValue(id, operation.labels[index]);
+    wx.showToast({ title: "设置成功", icon: "success" });
+  },
+
+  async manageScreenControl(sdk) {
+    const action = await choose(["立即亮屏", "立即息屏", "查询屏幕状态"]);
+    if (action === null) return;
+    if (action === 2) {
+      const isOn = await sdk.getScreenOn();
+      const text = isOn ? "当前亮屏" : "当前息屏";
+      this.updateSettingValue("screenControl", text);
+      wx.showToast({ title: text, icon: "none" });
+      return;
+    }
+    const isOn = action === 0;
+    await sdk.setScreenOn(isOn);
+    this.updateSettingValue("screenControl", isOn ? "已亮屏" : "已息屏");
     wx.showToast({ title: "设置成功", icon: "success" });
   },
 

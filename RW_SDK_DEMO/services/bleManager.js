@@ -323,6 +323,11 @@ class BleManager {
                 `密码认证功能位 payload[44]=${detail.passwordAuth.rawHex}，Auth(bit0)=${detail.passwordAuth.bit0 ? 1 : 0}`,
               );
             }
+            if (detail.screenControl) {
+              this.log(
+                `即时屏幕控制功能位 payload[26]=${detail.screenControl.rawHex}，bit1=${detail.screenControl.bit1 ? 1 : 0}`,
+              );
+            }
             if (detail.healthData) {
               this.log(
                 `健康功能表 总开关[83]=${detail.healthData.allSwitch.rawByte}，血糖[92]=${detail.healthData.bloodSugar.rawByte}，体温[94]=${detail.healthData.temperature.rawByte}`,
