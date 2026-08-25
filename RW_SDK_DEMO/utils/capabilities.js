@@ -43,6 +43,7 @@ const SETTING_TYPES = [
   { id: "screenControl", title: "即时屏幕控制", subtitle: "亮屏、息屏或查询当前状态", support: (m) => m.supportScreenControl },
   { id: "raiseToWake", title: "抬腕亮屏", subtitle: "设置开关与生效时段", support: (m) => m.raiseBrightScreen },
   { id: "ledLevel", title: "LED 亮度", subtitle: "设置 LED 开关与亮度", support: (m) => m.ledLight },
+  { id: "timeFormat", title: "12/24小时制", subtitle: "设置设备时间显示格式", support: (m) => m.ledLight },
   { id: "wearHand", title: "佩戴位置", subtitle: "左手或右手佩戴", support: (m) => m.wearDir },
   { id: "findDevice", title: "查找设备", subtitle: "让戒指发出查找提示", support: (m) => m.findDevice, action: true },
   { id: "takePhoto", title: "遥控拍照", subtitle: "接收戒指拍照事件", support: (m) => m.takePhoto },

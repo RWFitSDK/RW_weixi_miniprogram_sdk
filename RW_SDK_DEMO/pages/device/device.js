@@ -300,6 +300,11 @@ Page({
         values: [0, 1, 2, 3],
         run: (value) => sdk.setLedLevel(value > 0, value),
       },
+      timeFormat: {
+        labels: ["24小时制", "12小时制"],
+        values: [0, 1],
+        run: (value) => sdk.setHourSystem(value),
+      },
       wearHand: {
         labels: ["左手", "右手"],
         values: [false, true],
