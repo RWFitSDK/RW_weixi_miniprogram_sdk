@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260820`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20260922`。
 
 #### 1.1 适用平台与语言
 
@@ -66,7 +66,7 @@ const scan = await RingSdk.startScan({
 });
 ```
 
-系统当前保持连接的设备会置顶返回，并带有 `systemConnected: true`、`RSSI: 0`；其余设备按 RSSI 从强到弱排列。大部分设备在 iOS 上连接后会由系统默认完成配对。
+当前SDK版本对应Service下的系统连接设备会置顶返回，并带有 `systemConnected: true`、`RSSI: 0`；其余设备按 RSSI 从强到弱排列。大部分设备在 iOS 上连接后会由系统默认完成配对。
 
 ##### 3.1.2 停止搜索
 
@@ -181,7 +181,12 @@ const latestMenu = await sdk.readFunctionList();
 | `supportTemperatureMonitoring` | 体温定时监测 |
 | `supportFallDetect` | 跌落提醒 |
 | `supportDevicePasswordAuth` | 设备密码认证 |
+| `supportDeviceChallenge` | 设备身份认证 |
 | `supportScreenControl` | 即时屏幕亮灭控制 |
+| `supportUnitSetting` | 公制/英制单位设置 |
+| `supportSedentary` | 久坐提醒 |
+| `supportDrink` | 喝水提醒 |
+| `supportRecording` | 录音 |
 
 调用相关接口前应先判断相应功能位。
 
@@ -189,16 +194,25 @@ const latestMenu = await sdk.readFunctionList();
 
 #### 3.2.1 基础功能指令接口
 
-##### 3.2.1.1 Get SDK Version
+##### 3.2.1.0 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260820"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260922"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
 RWSDK.getSDKVersion();
 RWSDK.SDK_VERSION;
 ```
+
+##### 3.2.1.1 获取设备 MAC 地址
+
+```js
+const macAddress = await sdk.readBleAddress();
+console.log(macAddress); // "AA:BB:CC:DD:EE:FF"
+```
+
+返回设备 BLE MAC 地址（大写、冒号分隔）。iOS 上 `deviceId` 不等于 MAC 地址；设备完成系统配对后可能无法再从广播包解析出地址，此时可通过本接口获取。绑定设备时应同时保存该地址（见 3.1.5）。
 
 ##### 3.2.1.2 设置用户信息
 
@@ -232,6 +246,16 @@ console.log(firmware);
 固件升级前应读取并核对当前设备型号与固件版本。
 
 ##### 3.2.1.4 获取电量
+
+`readPower()` 返回 `level`（电量百分比）。
+
+| `PowerInfo` 属性 | 说明 |
+| --- | --- |
+| `level` | 电量百分比，`0-100` |
+| `voltage` | 电池电压（mV）；固件未返回时为 `undefined` |
+| `charging` | 是否在充电：充电中与充电完成均为 `true`，未充电为 `false`；固件未返回时为 `undefined`。注意 `false` 无法区分“未充电”与“固件未提供充电状态” |
+
+实时电量通过 `onDeviceEvent()` 的 `event.type === "power"` 接收，字段与查询一致。充电状态推送需固件支持。
 
 ```js
 const power = await sdk.readPower();
@@ -433,18 +457,40 @@ const count = await sdk.getAlarmVibrationDuration();
 await sdk.setAlarmVibrationDuration(2); // 0-6，0 不震动
 ```
 
-##### 3.2.1.21 触摸事件通知
+##### 3.2.1.21 设备主动推送监听
+
+> 设备主动事件的统一监听通道：电量推送、录音状态推送、触摸/跌落事件等按 `event.type` 分发。
+
+`sdk.onDeviceEvent(listener)` 返回注销函数，退出相关页面时调用：
 
 ```js
 const off = sdk.onDeviceEvent((event) => {
-  if (event.type !== "touch") return;
-  // keyType: 1 触摸，2 跌落
-  // touchType: 1 单击、2 双击、3 三击、4 长按、5 甩动
-  console.log(event.keyType, event.touchType);
+  switch (event.type) {
+    case "touch":
+      // keyType: 1 触摸，2 跌落（需开启跌落提醒 3.2.1.24）
+      // touchType: 1 单击、2 双击、3 三击、4 长按、5 甩动；跌落时默认 1
+      console.log(event.keyType, event.touchType);
+      break;
+    case "power":
+      console.log(event.level, event.charging);
+      break;
+    case "recordStatus":
+      console.log(event.status.recording, event.status.remainingCapacity);
+      break;
+  }
 });
 ```
 
-该功能需要设备固件支持。退出相关页面时调用 `off()`。
+推送类型说明：
+
+| `event.type` | 数据 | 字段 | 说明 |
+| --- | --- | --- | --- |
+| `power` | 电量与充电状态 | `level` / `voltage` / `charging` | 见 3.2.1.4 |
+| `recordStatus` | 录音状态推送 | `status`（字段同 `RecordStatus`） | 见 3.2.5.2 |
+| `muslimCount` | 赞念计数实时上报 | `count`（本次计数）、`timestamp`（Unix 毫秒） | 用户在设备上按键计数时上报，无需开启检测；见 3.2.1.15 |
+| `touch` | 触摸/跌落事件 | `keyType`（`1` 触摸，`2` 跌落）、`touchType`（`1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动；跌落时默认 `1`） | 需设备固件支持；跌落提醒需开启 3.2.1.24 |
+
+触摸与跌落事件需设备固件支持。
 
 ##### 3.2.1.22 震动间隔时长设置与获取
 
@@ -520,6 +566,16 @@ const sdk = await RingSdk.connect(deviceId);
 
 当业务层已通过可靠方式确认用户具备密码重置资格时，可在连接前调用该方法。SDK会在下一次连接中将设备密码重置为传入密码；重置成功后，该密码会自动用于后续正常连接认证。该授权只对下一次连接有效。
 
+###### 3.2.1.26.4 设备身份认证
+
+功能位：`supportDeviceChallenge`。透传云端下发的挑战值，返回设备以出厂密钥计算的 HMAC-SHA256 应答；应答校验由业务与云端完成。
+
+```js
+// challengeHex 为云端下发的 64 个 hex 字符(32 字节, 兼容空格/冒号/横线分隔)
+const response = await sdk.deviceChallenge("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+console.log(response); // 设备应答, 64 位 hex, 与云端比对
+```
+
 ##### 3.2.1.27 即时屏幕控制
 
 功能位：`supportScreenControl`。仅支持该能力的设备可使用。
@@ -529,29 +585,56 @@ await sdk.setScreenOn(true);  // 亮屏
 await sdk.setScreenOn(false); // 息屏
 ```
 
+##### 3.2.1.28 公制/英制单位设置与获取
+
+功能位：`supportUnitSetting`。
+
+```js
+await sdk.setMeasureUnit(1);      // 0=公制, 1=英制
+const unit = await sdk.readMeasureUnit();
+```
+
+##### 3.2.1.29 久坐提醒设置与获取
+
+功能位：`supportSedentary`。设置帧重复日固定为每天。
+
+```js
+await sdk.setSedentaryRemind({ enabled: true, intervalMinutes: 60, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 });
+
+const info = await sdk.readSedentaryRemind();
+console.log(info.enabled, info.intervalMinutes, info.weekdays); // weekdays: bit0=周日…bit6=周六
+```
+
+##### 3.2.1.30 喝水提醒设置与获取
+
+功能位：`supportDrink`。参数与返回同久坐提醒(3.2.1.29)。
+
+```js
+await sdk.setDrinkRemind({ enabled: true, intervalMinutes: 60 });
+const info = await sdk.readDrinkRemind();
+```
+
 #### 3.2.2 健康数据同步（实时单次与全天检测）
 
 实时单次检测由小程序启动后立即返回过程数据；全天检测由设备按计划测量并保存历史数据。睡眠没有实时单次检测。
 
 ##### 3.2.2.1 实时检测——启动与关闭设备健康数据检测
 
-同一时间只能开启一种类型，收到完成事件或主动关闭后才能启动另一种。实时数据通过 `onDeviceEvent()` 返回，SDK 不负责持久化。
+使用 `controlOpen()` 管理单次检测：`1` 开始、`0` 停止。实时数据通过 `onData` 返回，检测结束通过 `onFinished` 返回，SDK 不负责持久化。同一时间只开启一种检测。
 
 ```js
 const { HealthMeasurementType } = require("./sdk/rw-ble-sdk.min.js");
 
-const off = sdk.onDeviceEvent((event) => {
-  if (event.type === "health") {
-    console.log(event.healthType, event.records);
-  }
-  if (event.type === "healthStatus" && event.completed) {
-    console.log("measurement completed", event.status);
-  }
+sdk.controlOpen(1, HealthMeasurementType.HEART_RATE, {
+  onStarted: () => console.log("started"),
+  onData: (records) => console.log(records),
+  onFinished: (result) => console.log(result.success, result.reason),
 });
-
-await sdk.setHealthMeasurement(HealthMeasurementType.HEART_RATE, true);
-await sdk.setHealthMeasurement(HealthMeasurementType.HEART_RATE, false);
+// 主动停止：结果仍通过开始时的 onFinished 返回。
+sdk.controlOpen(0, HealthMeasurementType.HEART_RATE, { onFinished: () => {} });
 ```
+
+完成、失败或断连后自动注销；检测长时间未结束时 SDK 会自动停止并返回 `reason: "timeout"`。页面退出可调用 `takeHealthMeasurement()` 仅注销监听（不停止设备测量）。重复开始会替换旧监听，同一时间只保留一个会话。
 
 支持的 `HealthMeasurementType`：
 
@@ -566,6 +649,8 @@ await sdk.setHealthMeasurement(HealthMeasurementType.HEART_RATE, false);
 | `BLOOD_SUGAR` | 血糖 | `0x10` |
 
 ##### 3.2.2.2 全天检测——设置健康数据全天监听间隔
+
+`getMonitoring(type)` 的 `durationNums` 返回可选间隔，如 `"30_60"`。旧固件未附带列表时，心率/PPG 默认 `"30_60"`，其他类型默认 `"60"`。
 
 所有类型共用：
 
@@ -1009,7 +1094,88 @@ const reports = await sdk.getWorkoutReports();
 
 `WorkoutReport` 包含 `startTime`、`endTime`（Unix 毫秒）、`exerciseTime`、`workModel`、`step`、`distance`、`calorie`、`speed`、`pace`、平均/最大/最小心率、步频、配速、`heartRates` 和 `pacePerKmList`。
 
-#### 3.2.5 传感器原始数据
+#### 3.2.5 录音功能
+
+功能位：`supportRecording`。仅支持该能力的设备可使用。录音数据为原始 Opus 编码字节，SDK 只负责传输，不保存本地、不做格式转换，由业务端自行处理。
+
+##### 3.2.5.1 开始/停止录音
+
+```js
+const result = await sdk.recordControl(true);   // 开始录音, 返回 0=成功、非 0 失败
+await sdk.recordControl(false);                 // 停止录音
+```
+
+`recordControl` 返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+
+##### 3.2.5.2 查询录音状态
+
+```js
+const status = await sdk.getRecordStatus();     // 实际录制状态以查询/推送为准
+```
+
+设备在录制状态变化时会主动推送，可通过 `onDeviceEvent` 监听 `recordStatus` 事件（`status` 字段同 `RecordStatus`），实际录制状态以查询或推送为准。
+
+| `RecordStatus` 属性 | 说明 |
+| --- | --- |
+| `recording` | 是否正在录制 |
+| `startTime` | 本次录音开始时间（Unix 毫秒，仅录制中有值，否则 `0`） |
+| `duration` | 本次已录时长（秒，仅录制中有值） |
+| `totalCapacity` / `remainingCapacity` | 录音区总容量 / 剩余容量（字节） |
+
+##### 3.2.5.3 获取录音文件列表
+
+一次性返回完整文件列表：
+
+```js
+const files = await sdk.getRecordFileList();
+files.forEach(({ fileId, fileSize, duration, timestamp }) => {
+  console.log(fileId, fileSize, duration, new Date(timestamp));
+});
+```
+
+| `RecordFileItem` 属性 | 说明 |
+| --- | --- |
+| `fileId` | 文件 ID（下载与删除时使用） |
+| `fileSize` | 文件大小（字节） |
+| `duration` | 录音时长（秒） |
+| `timestamp` | 录制时间（Unix 毫秒） |
+
+##### 3.2.5.4 下载录音文件
+
+传输过程由 SDK 自动管理，进度通过 `onProgress` 汇报，完成后一次性返回完整数据。
+
+```js
+const result = await sdk.transferRecordFile(fileId, {
+  onProgress: (received, meta) => console.log(`${received}/${meta.fileSize} 字节`),
+});
+```
+
+| `RecordTransferResult` 属性 | 说明 |
+| --- | --- |
+| `fileType` / `format` | 设备侧文件类型与编码格式标识 |
+| `duration` / `timestamp` | 录音时长（秒）与录制时间（Unix 毫秒） |
+| `fileId` / `fileSize` | 文件 ID 与文件大小（字节） |
+| `data` | 拼接完整的原始录音字节（`Uint8Array`），由业务端自行保存或转码 |
+
+同一时间只允许一个下载任务，重复调用会 reject；断连或传输异常经 reject 收尾。
+
+##### 3.2.5.5 删除录音文件
+
+```js
+const status = await sdk.deleteRecordFile(fileId);  // 删除指定文件
+```
+
+返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+
+##### 3.2.5.6 格式化录音区
+
+```js
+const status = await sdk.formatRecordStorage();  // 清空全部录音文件, 不可恢复
+```
+
+返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+
+#### 5.2.5 传感器原始数据
 
 | 数据 | 获取方式 |
 | --- | --- |
@@ -1034,7 +1200,7 @@ const reports = await sdk.getWorkoutReports();
 
 绿光和红光不能同时开启；IR 不能单独开启。
 
-##### 3.2.5.0 PPG 定时监测
+##### 5.2.5.0 PPG 定时监测
 
 功能位：`supportPPGMonitoring`。
 
@@ -1050,7 +1216,7 @@ await sdk.setMonitoring("ppg", {
 const ppgPlan = await sdk.getMonitoring("ppg");
 ```
 
-##### 3.2.5.1 启动与关闭传感器原始数据
+##### 5.2.5.1 启动与关闭传感器原始数据
 
 ```js
 const { SensorRawControl } = require("./sdk/rw-ble-sdk.min.js");
@@ -1065,7 +1231,7 @@ await sdk.controlSensorRaw(SensorRawControl.START, 3);
 await sdk.controlSensorRaw(SensorRawControl.STOP, 3);
 ```
 
-##### 3.2.5.2 历史原始数据获取
+##### 5.2.5.2 历史原始数据获取
 
 ```js
 const records = await sdk.getSensorHistoryRaw();
@@ -1084,7 +1250,7 @@ const records = await sdk.getSensorHistoryRaw();
 
 同步成功后设备历史数据会删除，应立即保存返回值。
 
-##### 3.2.5.3 睡眠状态实时推送
+##### 5.2.5.3 睡眠状态实时推送
 
 功能位：`supportSensorRawSleep`。无需调用 `controlSensorRaw()`。
 
@@ -1105,6 +1271,13 @@ const off = sdk.onDeviceEvent((event) => {
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20260922** (2026.09.22)
+- 修正 MAC 地址显示颠倒的问题(3.2.1.1)
+- 添加设备身份认证接口(3.2.1.26.4), 功能表添加 `supportDeviceChallenge`
+- 添加久坐提醒设置与获取接口(3.2.1.29), 功能表添加 `supportSedentary`
+- 添加喝水提醒设置与获取接口(3.2.1.30), 功能表添加 `supportDrink`
+- 添加录音功能六接口(3.2.5): 控制/状态/文件列表/下载/删除/格式化, 需固件支持
 
 **RW_SDK_V2.0.0_20260820** (2026.08.20)
 - 添加即时屏幕控制功能(3.2.1.27)

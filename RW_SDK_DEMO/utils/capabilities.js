@@ -88,6 +88,8 @@ const SETTING_TYPES = [
     support: (m) => m.supportCountReminder,
   },
   { id: "fallDetect", title: "跌落提醒", subtitle: "开启或关闭跌落检测", support: (m) => m.supportFallDetect },
+  { id: "sedentary", title: "久坐提醒", subtitle: "设置久坐提醒间隔", support: (m) => m.supportSedentary },
+  { id: "drink", title: "喝水提醒", subtitle: "设置喝水提醒间隔", support: (m) => m.supportDrink },
   { id: "rememberSwitch", title: "赞念开关", subtitle: "开启或关闭赞念功能", support: (m) => m.rememberSwitch },
   {
     id: "muslimTimeMode",
@@ -96,6 +98,7 @@ const SETTING_TYPES = [
     support: (m) => m.supportMuslimTimeDisplayMode,
   },
   { id: "powerOff", title: "关机与恢复出厂", subtitle: "设备电源操作", support: (m) => m.powerOff || m.recovery },
+  { id: "deviceChallenge", title: "设备身份认证", subtitle: "演示挑战应答(实际由云端下发)", support: (m) => m.supportDeviceChallenge, action: true },
 ];
 
 function getHealthCards(device, realtimeHealth = {}) {

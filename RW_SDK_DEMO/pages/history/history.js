@@ -158,7 +158,7 @@ Page({
     this.setData({ measurementBusy: true });
     try {
       await bleManager.setHealthMeasurement(this.data.type, this.definition.measurementCode, false);
-      wx.showToast({ title: "实时检测已结束", icon: "success" });
+      wx.showToast({ title: "已请求结束检测", icon: "none" });
     } catch (error) {
       wx.showToast({ title: error.message || "结束失败", icon: "none" });
     } finally {

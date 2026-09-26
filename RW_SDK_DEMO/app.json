@@ -6,7 +6,8 @@
     "pages/history/history",
     "pages/workout/workout",
     "pages/workout-running/workout-running",
-    "pages/firmware-upgrade/firmware-upgrade"
+    "pages/firmware-upgrade/firmware-upgrade",
+    "pages/record/record"
   ],
   "window": {
     "navigationBarTitleText": "RW 健康",

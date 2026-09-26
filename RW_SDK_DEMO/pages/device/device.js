@@ -261,6 +261,7 @@ Page({
     if (id === "sensorRawPPG") return this.manageSensorRawPpg(sdk);
     if (id === "screenControl") return this.manageScreenControl(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
+    if (id === "deviceChallenge") return this.runDeviceChallenge(sdk);
 
     const operations = {
       dnd: {
@@ -350,6 +351,24 @@ Page({
         values: [false, true],
         run: (value) => sdk.setFallDetect(value),
       },
+      sedentary: {
+        labels: ["关闭", "每小时 9:00–18:00", "每 2 小时 9:00–18:00"],
+        values: [
+          { enabled: false, intervalMinutes: 60, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+          { enabled: true, intervalMinutes: 60, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+          { enabled: true, intervalMinutes: 120, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+        ],
+        run: (value) => sdk.setSedentaryRemind(value),
+      },
+      drink: {
+        labels: ["关闭", "每 30 分钟 9:00–18:00", "每 60 分钟 9:00–18:00"],
+        values: [
+          { enabled: false, intervalMinutes: 30, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+          { enabled: true, intervalMinutes: 30, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+          { enabled: true, intervalMinutes: 60, startHour: 9, startMinute: 0, endHour: 18, endMinute: 0 },
+        ],
+        run: (value) => sdk.setDrinkRemind(value),
+      },
       rememberSwitch: {
         labels: ["关闭", "开启"],
         values: [false, true],
@@ -384,6 +403,18 @@ Page({
     await sdk.setScreenOn(isOn);
     this.updateSettingValue("screenControl", isOn ? "已亮屏" : "已息屏");
     wx.showToast({ title: "设置成功", icon: "success" });
+  },
+
+  async runDeviceChallenge(sdk) {
+    // Demo 使用固定演示挑战值; 实际业务由云端下发, 应答交回云端比对
+    const demoChallenge = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    const response = await sdk.deviceChallenge(demoChallenge);
+    this.updateSettingValue("deviceChallenge", "已认证");
+    wx.showModal({
+      title: "设备身份认证",
+      content: `设备应答:\n${response}\n\n实际业务中挑战值由云端下发, 应答交回云端比对。`,
+      showCancel: false,
+    });
   },
 
   async manageSensorRawPpg(sdk) {

@@ -1,0 +1,52 @@
+<view class="page record-page">
+  <view class="page-heading">
+    <view class="page-title">录音管理</view>
+    <view class="page-subtitle">录音控制与文件下载</view>
+  </view>
+
+  <view class="section-title">录音控制<text class="section-caption" bindtap="refreshStatus">{{loadingStatus ? '正在获取' : '点击刷新状态'}}</text></view>
+  <view class="card">
+    <view class="info-row"><text>录制状态</text><text class="{{status.recording ? 'recording-on' : ''}}">{{status.recording ? '录制中' : '未在录制'}}</text></view>
+    <view class="info-row" wx:if="{{status.recording}}"><text>已录时长</text><text>{{status.duration}} 秒</text></view>
+    <view class="info-row"><text>剩余空间</text><text>{{capacityText}}</text></view>
+    <button
+      class="{{status.recording ? 'danger-button' : 'primary-button'}} record-toggle"
+      loading="{{toggling}}"
+      disabled="{{!connected || toggling}}"
+      bindtap="toggleRecord"
+    >{{status.recording ? '停止录音' : '开始录音'}}</button>
+  </view>
+
+  <view class="file-heading">
+    <view class="section-title">录音文件<text class="section-caption" bindtap="refreshFiles">{{loadingFiles ? '正在获取' : '点击刷新'}}</text></view>
+  </view>
+  <view wx:if="{{files.length}}" class="card file-list">
+    <view wx:for="{{files}}" wx:key="fileId" class="file-cell">
+      <view class="file-symbol">REC</view>
+      <view class="file-main">
+        <view class="file-name">{{item.timeText}}</view>
+        <view class="file-meta">{{item.sizeText}} · {{item.duration}} 秒</view>
+        <view wx:if="{{downloading && downloading.fileId === item.fileId}}" class="transfer-track">
+          <view class="transfer-fill" style="width: {{downloading.progress}}%"></view>
+        </view>
+      </view>
+      <view class="file-actions">
+        <button
+          class="mini-button"
+          size="mini"
+          loading="{{downloading && downloading.fileId === item.fileId}}"
+          disabled="{{!connected || (downloading && downloading.fileId !== item.fileId)}}"
+          data-file-id="{{item.fileId}}"
+          bindtap="downloadFile"
+        >下载</button>
+        <button
+          class="mini-button danger"
+          size="mini"
+          disabled="{{!connected || !!downloading}}"
+          data-file-id="{{item.fileId}}"
+          bindtap="removeFile"
+        >删除</button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -3,9 +3,8 @@ const storage = require("../utils/storage");
 const { getWorkoutTypeName, formatWorkoutDuration } = require("../utils/workout");
 
 const SCAN_TIMEOUT_MS = 10000;
-const HEALTH_MEASUREMENT_TIMEOUT_MS = 120000;
 // 仅用于演示设备密码认证；实际项目应由登录业务在每次连接前提供当前用户密码。
-const DEMO_DEVICE_PASSWORD = "1234";
+const DEMO_DEVICE_PASSWORD = "4567";
 
 const WX_BLE_MESSAGES = {
   10000: { code: "ADAPTER_NOT_INITIALIZED", message: "蓝牙尚未初始化，请稍后重试" },
@@ -38,7 +37,7 @@ function createBleError(error, stage) {
   const reason = error && error.reason ? error.reason : "";
   let mapped = errCode === undefined ? null : WX_BLE_MESSAGES[errCode];
   if (reason === "PASSWORD_AUTH_FAILED") {
-    mapped = { code: "PASSWORD_AUTH_FAILED", message: "设备密码认证失败；Demo 默认演示密码为 1234" };
+    mapped = { code: "PASSWORD_AUTH_FAILED", message: "设备密码认证失败；Demo 默认演示密码为 4567" };
   }
   if (!mapped && (lowerMessage.includes("auth") || lowerMessage.includes("permission") || lowerMessage.includes("authorize"))) {
     mapped = { code: "PERMISSION_DENIED", message: "微信蓝牙权限未开启，请在小程序设置中允许后重试", action: "openSetting" };
@@ -91,7 +90,6 @@ class BleManager {
     this.connectingDeviceId = "";
     this.scanTicker = null;
     this.scanDeviceDebugSignature = "";
-    this.healthMeasurementTimer = null;
     this.intentionalDisconnectIds = new Set();
     this.initialized = false;
     this.state = {
@@ -509,9 +507,12 @@ class BleManager {
     if (!enabled && activeType && activeType !== type) {
       throw new Error(`当前正在进行的是${activeType}检测`);
     }
-    await this.sdk.setHealthMeasurement(measurementCode, enabled);
-    this.clearHealthMeasurementTimer();
-    const statePatch = { activeMeasurementType: enabled ? type : "" };
+    if (!enabled) {
+      this.sdk.controlOpen(0, measurementCode, { onFinished: () => {} });
+      this.log(`请求结束${type}实时检测`);
+      return;
+    }
+    const statePatch = { activeMeasurementType: type };
     if (enabled && this.state.realtimeHealth[type]) {
       const realtimeHealth = Object.assign({}, this.state.realtimeHealth);
       delete realtimeHealth[type];
@@ -519,36 +520,30 @@ class BleManager {
       statePatch.realtimeHealthRevision = this.state.realtimeHealthRevision + 1;
     }
     this.patch(statePatch);
-    if (enabled) this.startHealthMeasurementTimer(type, measurementCode);
-    this.log(`${enabled ? "开始" : "结束"}${type}实时检测`);
-  }
-
-  startHealthMeasurementTimer(type, measurementCode) {
-    this.clearHealthMeasurementTimer();
-    this.healthMeasurementTimer = setTimeout(() => {
-      this.healthMeasurementTimer = null;
-      if (this.state.activeMeasurementType !== type) return;
-
-      // 先把停止命令排入队列，再释放 UI 状态；随后启动的新测量会排在停止命令之后。
-      const stopPromise = this.sdk && this.state.connectionState === "connected"
-        ? this.sdk.setHealthMeasurement(measurementCode, false)
-        : null;
-      if (stopPromise) {
-        stopPromise.catch((error) => {
-          this.log(`${type}实时检测超时停止失败：${error.message || error}`);
+    await new Promise((resolve, reject) => {
+      try {
+        this.sdk.controlOpen(1, measurementCode, {
+          onStarted: () => {
+            this.log(`开始${type}实时检测`);
+            resolve();
+          },
+          onData: (records) => this.updateRealtimeHealth(type, records),
+          onFinished: (result) => {
+            this.patch({ activeMeasurementType: "" });
+            this.log(`${type}实时检测结束：${result.reason}`);
+            if (result.success) resolve();
+            else {
+              const message = result.reason === "timeout" ? "实时检测超时" : "实时检测失败或连接断开";
+              reject(new Error(message));
+              if (wx.showToast) wx.showToast({ title: message, icon: "none" });
+            }
+          },
         });
+      } catch (error) {
+        this.patch({ activeMeasurementType: "" });
+        reject(error);
       }
-      this.patch({ activeMeasurementType: "" });
-      this.log(`${type}实时检测超过 120 秒未完成，已自动释放`);
-      if (wx.showToast) {
-        wx.showToast({ title: "实时检测超时，已自动结束", icon: "none", duration: 2500 });
-      }
-    }, HEALTH_MEASUREMENT_TIMEOUT_MS);
-  }
-
-  clearHealthMeasurementTimer() {
-    if (this.healthMeasurementTimer) clearTimeout(this.healthMeasurementTimer);
-    this.healthMeasurementTimer = null;
+    });
   }
 
   async getMonitoring(type) {
@@ -630,29 +625,19 @@ class BleManager {
       this.updateBoundDevice({ powerLevel: event.level });
       return;
     }
-    if (event.type === "health" && this.state.boundDevice) {
-      const records = event.records || [];
-      if (records.length) {
-        const latest = records.reduce((result, record) => (
-          !result || record.measuredAt >= result.measuredAt ? record : result
-        ), null);
-        const realtimeHealth = Object.assign({}, this.state.realtimeHealth, {
-          [event.healthType]: latest,
-        });
-        this.patch({
-          realtimeHealth,
-          realtimeHealthRevision: this.state.realtimeHealthRevision + 1,
-        });
-        this.log(`收到${event.healthType}实时数据 ${records.length} 条`);
-      }
+    if (event.type === "muslimCount") {
+      // 赞念计数实时上报: 无需开启检测, 与电量/录音状态/触摸同属设备主动通知。
+      this.updateRealtimeHealth("muslimCount", [{
+        id: `muslim-realtime-${event.timestamp}`,
+        type: "muslimCount",
+        measuredAt: event.timestamp,
+        value: event.count,
+        unit: "次",
+        summary: "赞念实时计数",
+      }]);
       return;
     }
-    if (event.type === "healthStatus" && event.completed) {
-      this.clearHealthMeasurementTimer();
-      this.patch({ activeMeasurementType: "" });
-      this.log("实时健康检测已结束");
-      return;
-    }
+    if (event.type === "health" || event.type === "healthStatus") return;
     if (event.type === "workoutState") {
       this.patch({
         workoutState: event.state,
@@ -665,6 +650,25 @@ class BleManager {
         workoutRealtime: event.data,
         workoutRevision: this.state.workoutRevision + 1,
       });
+    }
+  }
+
+  updateRealtimeHealth(type, records) {
+    if (this.state.boundDevice) {
+      if (records.length) {
+        const latest = records.reduce((result, record) => (
+          !result || record.measuredAt >= result.measuredAt ? record : result
+        ), null);
+        const realtimeHealth = Object.assign({}, this.state.realtimeHealth, {
+          [type]: latest,
+        });
+        this.patch({
+          realtimeHealth,
+          realtimeHealthRevision: this.state.realtimeHealthRevision + 1,
+        });
+        this.log(`收到${type}实时数据 ${records.length} 条`);
+      }
+      return;
     }
   }
 
@@ -703,7 +707,6 @@ class BleManager {
     if (this.sdk) this.sdk.dispose(reason);
     this.sdk = null;
     this.healthSyncPromise = null;
-    this.clearHealthMeasurementTimer();
     if (this.deviceEventUnsubscribe) this.deviceEventUnsubscribe();
     this.deviceEventUnsubscribe = null;
     if (this.state.activeMeasurementType || Object.keys(this.state.realtimeHealth).length) {

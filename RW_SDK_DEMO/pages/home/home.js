@@ -7,6 +7,7 @@ Page({
     boundDevice: null,
     connectionState: "disconnected",
     healthCards: [],
+    recordEnabled: false,
     connected: false,
     healthSyncing: false,
     healthSyncProgress: 0,
@@ -20,6 +21,7 @@ Page({
         connectionState: state.connectionState,
         connected: state.connected,
         healthCards: getHealthCards(state.boundDevice, state.realtimeHealth),
+        recordEnabled: !!(state.boundDevice && state.boundDevice.supportMenu && state.boundDevice.supportMenu.supportRecording),
         healthSyncing: state.healthSyncing,
         healthSyncProgress: state.healthSyncProgress,
         lastSyncText: state.healthSyncing
@@ -80,5 +82,9 @@ Page({
       return;
     }
     wx.navigateTo({ url: `/pages/history/history?type=${type}` });
+  },
+
+  openRecord() {
+    wx.navigateTo({ url: "/pages/record/record" });
   }
 });

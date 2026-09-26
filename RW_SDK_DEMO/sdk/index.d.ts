@@ -1,5 +1,7 @@
 export interface PowerInfo {
 	level: number;
+	voltage?: number;
+	charging?: boolean;
 }
 export interface FirmwareInfo {
 	version: string;
@@ -11,6 +13,7 @@ export interface FirmwareInfo {
 }
 /** 设备功能配置表的只读模型。 */
 export interface SupportMenu {
+	supportUnitSetting: boolean;
 	addressBook: boolean;
 	msgNotification: boolean;
 	takePhoto: boolean;
@@ -53,6 +56,10 @@ export interface SupportMenu {
 	supportPPGMonitoring: boolean;
 	supportTemperatureMonitoring: boolean;
 	supportRecording: boolean;
+	supportMeasureUnit: boolean;
+	supportSedentary: boolean;
+	supportDrink: boolean;
+	supportDeviceChallenge: boolean;
 	supportDevicePasswordAuth: boolean;
 	supportScreenControl: boolean;
 	activityDataInterval: number;
@@ -68,31 +75,6 @@ export interface SupportMenu {
 	bloodSugar: boolean;
 	muslimCountData: boolean;
 	temperature: boolean;
-}
-/** 设备基础设置使用的数据模型。 */
-export interface MonitorSchedule {
-	enabled: boolean;
-	startHour?: number;
-	startMinute?: number;
-	endHour?: number;
-	endMinute?: number;
-	intervalMinutes: number;
-}
-export interface TimeRangeSwitch {
-	enabled: boolean;
-	startHour: number;
-	startMinute: number;
-	endHour: number;
-	endMinute: number;
-}
-export interface UserProfile {
-	/** 0=公制，1=英制。 */
-	measureUnit: number;
-	/** 1=男，其它值=女。 */
-	gender: number;
-	age: number;
-	height: number;
-	weight: number;
 }
 /**
  * 健康历史数据解析。
@@ -141,6 +123,48 @@ export interface MonitorInfo {
 	endHour: number;
 	endMinute: number;
 	intervalMinutes: number;
+	/** 设备支持的监测间隔列表, 下划线分隔(如 "30_60"); 旧固件为 SDK 默认值。 */
+	durationNums?: string;
+}
+/** 久坐/喝水提醒读取结果： weekdays 为重复日 bit0=周日…bit6=周六(设置帧固定每天)。 */
+export interface ReminderInfo {
+	enabled: boolean;
+	startHour: number;
+	startMinute: number;
+	endHour: number;
+	endMinute: number;
+	intervalMinutes: number;
+	weekdays: number[];
+}
+/** 录音状态(对齐 Android RecordStatusBean; 协议 ≥20 字节, 容量单位字节)。 */
+export interface RecordStatus {
+	recording: boolean;
+	/** 本次录音开始时间(仅录制中有值, 毫秒); 0=未知。 */
+	startTime: number;
+	/** 本次已录时长(仅录制中有值, 秒)。 */
+	duration: number;
+	totalCapacity: number;
+	remainingCapacity: number;
+}
+/** 录音文件列表项(fileId/fileSize/duration 各 4 字节大端, 时间为 2000 纪元大端)。 */
+export interface RecordFileItem {
+	fileId: number;
+	fileSize: number;
+	/** 录音时长(秒)。 */
+	duration: number;
+	/** 录制时间(毫秒)。 */
+	timestamp: number;
+}
+/** 录音文件元信息(传输帧携带, 对齐 Android RecordFileTransferBean 只读部分)。 */
+export interface RecordTransferMeta {
+	fileType: number;
+	/** 录音时长(秒)。 */
+	duration: number;
+	/** 录制时间(毫秒)。 */
+	timestamp: number;
+	fileId: number;
+	format: number;
+	fileSize: number;
 }
 export interface DndInfo {
 	enabled: boolean;
@@ -220,9 +244,15 @@ type SensorRawData = {
 	type: 5;
 	sleepDataList: SleepRawItem[];
 };
-export type DeviceEvent = {
+export type DeviceEvent = ({
 	type: "power";
-	level: number;
+} & PowerInfo) | {
+	type: "recordStatus";
+	status: RecordStatus;
+} | {
+	type: "muslimCount";
+	count: number;
+	timestamp: number;
 } | {
 	type: "camera";
 	action: number;
@@ -239,6 +269,7 @@ export type DeviceEvent = {
 	rawStatus: number;
 	status: number;
 	completed: boolean;
+	measurementType?: number;
 } | {
 	type: "healthAlert";
 	alertType: number;
@@ -261,8 +292,49 @@ export type DeviceEvent = {
 	result: number;
 	completed: boolean;
 };
+export interface MeasurementSessionResult {
+	/** 检测类型(HealthMeasurementType 低字节)。 */
+	healthType: number;
+	success: boolean;
+	/** device=设备结束帧; timeout=70s超时; error=开始指令失败。 */
+	reason: "device" | "timeout" | "error";
+}
+export interface MeasurementSessionHandlers {
+	onStarted?: () => void;
+	onData?: (records: HealthRecord[]) => void;
+	onFinished: (result: MeasurementSessionResult) => void;
+}
+/** 设备基础设置使用的数据模型。 */
+export interface MonitorSchedule {
+	enabled: boolean;
+	startHour?: number;
+	startMinute?: number;
+	endHour?: number;
+	endMinute?: number;
+	intervalMinutes: number;
+}
+export interface TimeRangeSwitch {
+	enabled: boolean;
+	startHour: number;
+	startMinute: number;
+	endHour: number;
+	endMinute: number;
+}
+export interface UserProfile {
+	/** 0=公制，1=英制。 */
+	measureUnit: number;
+	/** 1=男，其它值=女。 */
+	gender: number;
+	age: number;
+	height: number;
+	weight: number;
+}
 export interface OtaUpgradeOptions {
 	onProgress?: (progress: number) => void;
+}
+/** 录音文件下载结果: 元信息 + 拼接完整的原始录音字节(业务端自行保存/转码)。 */
+export interface RecordTransferResult extends RecordTransferMeta {
+	data: Uint8Array;
 }
 export type MonitoringType = "heartRate" | "bloodOxygen" | "hrv" | "stress" | "bloodSugar" | "bloodPressure" | "temperature" | "ppg";
 export interface RingSdkOptions {
@@ -295,7 +367,7 @@ export interface SyncAllHealthResult {
 	errors: Partial<Record<HealthDataType, string>>;
 }
 export type DeviceEventHandler = (event: DeviceEvent) => void;
-export declare const SDK_VERSION = "RW_SDK_V2.0.0_20260820";
+export declare const SDK_VERSION: string;
 /** 获取当前 SDK 版本号。 */
 export declare function getSDKVersion(): string;
 export type RingSdkConnectionStage = "connecting" | "initializing" | "ready";
@@ -324,14 +396,14 @@ export interface RingSdkScanDevice {
 	localName?: string;
 	RSSI: number;
 	macAddress: string;
-	/** iOS 系统当前保持连接的设备为 true。 */
+	/** 可确认属于当前SDK构建版本的系统连接设备为true。 */
 	systemConnected: boolean;
 	[key: string]: unknown;
 }
 export interface RingSdkScanOptions {
 	/** 自动停止搜索的时间，默认 10 秒。 */
 	timeoutMs?: number;
-	/** 设备列表变化时回调；系统连接设备置顶，其余按 RSSI 从强到弱排列。 */
+	/** 设备列表变化时回调；可验证的系统连接设备置顶，其余按RSSI从强到弱排列。 */
 	onDevices?: (devices: RingSdkScanDevice[]) => void;
 	/** 可选诊断回调；用于真机排查搜索与系统连接设备查询。 */
 	debug?: (event: string, detail: unknown) => void;
@@ -357,6 +429,10 @@ export declare class RingSdkConnectionError extends Error {
  * 调用方只提供微信扫描得到的 deviceId；底层通信通道与初始化均由 SDK 管理。
  */
 export declare class RingSdk {
+	/** 新增会话接口；原 setHealthMeasurement/onDeviceEvent 保持不变。 */
+	controlOpen(type: 0 | 1, healthType: number, handlers: MeasurementSessionHandlers): void;
+	/** 注销测量监听，不发送停止指令。 */
+	takeHealthMeasurement(): void;
 	supportMenu: SupportMenu | null;
 	getSDKVersion(): string;
 	upgradeFirmware(firmware: Uint8Array, options: OtaUpgradeOptions): Promise<void>;
@@ -409,6 +485,41 @@ export declare class RingSdk {
 	setBloodOxygenAlert(enabled: boolean, lowerValue: number): Promise<void>;
 	getBloodOxygenAlert(): Promise<AlertConfig>;
 	setHealthMeasurement(healthType: number, enabled: boolean): Promise<void>;
+	/** 公制/英制单位(协议2.2.28)：0=公制, 1=英制。 */
+	setMeasureUnit(unit: 0 | 1): Promise<void>;
+	readMeasureUnit(): Promise<number>;
+	/** 久坐提醒(协议2.2.18)：需功能表 supportSedentary。 */
+	setSedentaryRemind(config: MonitorSchedule): Promise<void>;
+	readSedentaryRemind(): Promise<ReminderInfo>;
+	/** 喝水提醒(协议2.2.19)：需功能表 supportDrink。 */
+	setDrinkRemind(config: MonitorSchedule): Promise<void>;
+	readDrinkRemind(): Promise<ReminderInfo>;
+	/**
+	 * 设备身份认证(协议2.1.5)：透传云端挑战值，返回设备 HMAC-SHA256 应答(64位hex)。
+	 * 挑战值须为64个hex字符(32字节，兼容分隔符)；应答校验由业务与云端完成。
+	 */
+	deviceChallenge(challengeHex: string): Promise<string>;
+	/** 开始/停止录音。返回设备应答状态(0=成功, 非 0 失败; 纯 ACK 时为 undefined); 实际录制状态经 getRecordStatus 或 recordStatus 推送获取。需功能表 supportRecording。 */
+	recordControl(start: boolean): Promise<number | undefined>;
+	/** 查询录音状态与录音区容量(总容量/剩余容量, 字节)。 */
+	getRecordStatus(): Promise<RecordStatus>;
+	/** 获取录音文件列表(设备分页推送, SDK 循环索取并聚合为完整列表; 并发调用共享同一次读取)。 */
+	getRecordFileList(): Promise<RecordFileItem[]>;
+	/**
+	 * 按文件 ID 下载录音文件, 返回拼接完整的原始录音字节——SDK 不做本地保存与格式
+	 * 转换(不封 Ogg、不转 WAV), 由业务端自行处理。进度经 handlers.onProgress 汇报。
+	 *
+	 * 协议为窗口式连续读取: 设备每收到一次 READ 推送至多 20 帧数据, SDK 校验
+	 * fileId/dataOffset/fileSize 连续性后自动应答索取下一窗口; 收满后设备以短帧
+	 * 收尾。传输中重复调用会被拒绝; 断连、校验失败或 30 秒无进展经 reject 收尾。
+	 */
+	transferRecordFile(fileId: number, handlers?: {
+		onProgress?: (received: number, meta: RecordTransferMeta) => void;
+	}): Promise<RecordTransferResult>;
+	/** 删除指定录音文件(fileId 4 字节大端)。返回设备应答状态(0=成功, 非 0 失败; 纯 ACK 时为 undefined)。 */
+	deleteRecordFile(fileId: number): Promise<number | undefined>;
+	/** 格式化录音存储区(清空全部录音文件)。返回设备应答状态(0=成功, 非 0 失败; 纯 ACK 时为 undefined)。 */
+	formatRecordStorage(): Promise<number | undefined>;
 	findDevice(): Promise<void>;
 	controlCamera(type: 0 | 1 | 2): Promise<void>;
 	setPowerControl(type: number): Promise<void>;
@@ -444,7 +555,7 @@ export declare class RingSdk {
 	/** 授权下一次连接重置设备密码；调用方应先在业务层完成重置资格校验。 */
 	static preparePasswordReset(targetPassword?: string | null): void;
 	static connect(deviceId: string, options?: RingSdkConnectOptions): Promise<RingSdk>;
-	/** 搜索设备；iOS 系统当前保持连接的设备会一同返回。 */
+	/** 搜索当前构建品牌的设备；可确认品牌的iOS系统连接设备会一同返回。 */
 	static startScan(options?: RingSdkScanOptions): Promise<RingSdkScanSession>;
 	/** 主动断开并释放 SDK 持有的微信 BLE 监听。 */
 	disconnect(reason?: string): Promise<void>;

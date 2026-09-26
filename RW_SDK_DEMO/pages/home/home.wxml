@@ -32,7 +32,7 @@
     <view class="sync-progress-bar" style="width: {{healthSyncProgress}}%"></view>
   </view>
 
-  <view wx:if="{{healthCards.length}}" class="health-grid">
+  <view wx:if="{{healthCards.length || recordEnabled}}" class="health-grid">
     <view
       wx:for="{{healthCards}}"
       wx:key="type"
@@ -47,6 +47,15 @@
       <view class="health-title">{{item.title}}</view>
       <view class="health-value">{{item.valueText}}</view>
       <view class="health-time">{{item.timeText}}</view>
+    </view>
+    <view wx:if="{{recordEnabled}}" class="health-card" bindtap="openRecord">
+      <view class="health-top">
+        <view class="health-icon">录</view>
+        <text class="health-arrow">›</text>
+      </view>
+      <view class="health-title">录音管理</view>
+      <view class="health-value">录音与文件</view>
+      <view class="health-time">点击进入</view>
     </view>
   </view>
 
