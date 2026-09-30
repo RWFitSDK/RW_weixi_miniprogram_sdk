@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260922`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20260930`。
 
 #### 1.1 适用平台与语言
 
@@ -67,6 +67,17 @@ const scan = await RingSdk.startScan({
 ```
 
 当前SDK版本对应Service下的系统连接设备会置顶返回，并带有 `systemConnected: true`、`RSSI: 0`；其余设备按 RSSI 从强到弱排列。大部分设备在 iOS 上连接后会由系统默认完成配对。
+
+扫描设备常用字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `deviceId` | 微信提供的设备标识，连接时使用 |
+| `name` / `localName` | 设备名称 |
+| `RSSI` | 信号强度（dBm）；系统连接设备固定为 `0` |
+| `macAddress` | 广播解析出的 BLE MAC；未携带时回退为其它来源，可能为空字符串 |
+| `batteryStatus` | 广播携带的电量状态：`0` 未充电、`1` 充电中、`2` 充满；广播未携带时为 `undefined` |
+| `systemConnected` | 当前SDK构建版本对应的系统连接设备为 `true` |
 
 ##### 3.1.2 停止搜索
 
@@ -186,6 +197,7 @@ const latestMenu = await sdk.readFunctionList();
 | `supportUnitSetting` | 公制/英制单位设置 |
 | `supportSedentary` | 久坐提醒 |
 | `supportDrink` | 喝水提醒 |
+| `supportVibrationControl` | 自定义震动控制（3.2.1.31） |
 | `supportRecording` | 录音 |
 
 调用相关接口前应先判断相应功能位。
@@ -197,7 +209,7 @@ const latestMenu = await sdk.readFunctionList();
 ##### 3.2.1.0 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260922"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260930"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -253,9 +265,13 @@ console.log(firmware);
 | --- | --- |
 | `level` | 电量百分比，`0-100` |
 | `voltage` | 电池电压（mV）；固件未返回时为 `undefined` |
-| `charging` | 是否在充电：充电中与充电完成均为 `true`，未充电为 `false`；固件未返回时为 `undefined`。注意 `false` 无法区分“未充电”与“固件未提供充电状态” |
+| `charging` | 是否正在充电：`true` 正在充电，`false` 未充电；固件未返回时为 `undefined`。注意 `false` 无法区分“未充电”与“固件未提供充电状态” |
 
 实时电量通过 `onDeviceEvent()` 的 `event.type === "power"` 接收，字段与查询一致。充电状态推送需固件支持。
+
+> [!TIP]
+>
+> 扫描阶段无需连接即可获知充电状态：扫描设备字段 `batteryStatus`（`0` 未充电、`1` 充电中、`2` 充满，见 3.1.1），由设备广播携带、SDK 扫描时解析。连接后 `readPower()` 返回电量百分比与 `charging` 充电状态，两者数据来源相互独立，请勿互相换算。
 
 ```js
 const power = await sdk.readPower();
@@ -612,6 +628,27 @@ console.log(info.enabled, info.intervalMinutes, info.weekdays); // weekdays: bit
 ```js
 await sdk.setDrinkRemind({ enabled: true, intervalMinutes: 60 });
 const info = await sdk.readDrinkRemind();
+```
+
+##### 3.2.1.31 控制自定义震动次数与强度
+
+功能位：`supportVibrationControl`。即时控制，不修改设备已保存的震动设置。
+
+| 参数 | 说明 |
+| --- | --- |
+| `mode` | `1-15`：单轮震动次数；`255`：持续或节奏循环 |
+| `strength` | `0`：停止；`1`：弱；`2`：中；`3`：强 |
+| `groupCount` | 节奏循环时每组震动次数，`1-15`；不使用循环时填 `0` |
+| `frequency` | 节奏循环时组内频率，`1-10` 次/秒；不使用循环时填 `0` |
+| `pause` | 节奏循环时组间停顿，`1-255`，单位 100ms；不使用循环时填 `0` |
+
+单轮和持续模式的三个循环参数均填 `0`；节奏循环使用 `mode=255` 并填写全部循环参数。`strength=0` 停止震动并忽略循环参数。参数非法抛 `Error`。指令为一次性应答，前一次返回后再发起下一次。
+
+```js
+await sdk.controlVibration(3, 2);                 // 中强度震动3次
+await sdk.controlVibration(255, 2);               // 持续震动
+await sdk.controlVibration(255, 2, 3, 2, 10);     // 每组3次、2次/秒、组间停顿1秒
+await sdk.controlVibration(255, 0);               // 停止震动
 ```
 
 #### 3.2.2 健康数据同步（实时单次与全天检测）
@@ -1271,6 +1308,10 @@ const off = sdk.onDeviceEvent((event) => {
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20260930** (2026.09.30)
+- 扫描设备新增广播电量状态 `batteryStatus`(3.1.1)
+- 添加自定义震动控制接口 `controlVibration`(3.2.1.31)，功能表添加 `supportVibrationControl`
 
 **RW_SDK_V2.0.0_20260922** (2026.09.22)
 - 修正 MAC 地址显示颠倒的问题(3.2.1.1)

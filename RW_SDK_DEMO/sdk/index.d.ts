@@ -59,6 +59,7 @@ export interface SupportMenu {
 	supportMeasureUnit: boolean;
 	supportSedentary: boolean;
 	supportDrink: boolean;
+	supportVibrationControl: boolean;
 	supportDeviceChallenge: boolean;
 	supportDevicePasswordAuth: boolean;
 	supportScreenControl: boolean;
@@ -396,6 +397,8 @@ export interface RingSdkScanDevice {
 	localName?: string;
 	RSSI: number;
 	macAddress: string;
+	/** 广播 offset 13 电量状态：0 未充电，1 充电中，2 充满；广播未携带、为非状态值（如旧固件 0x80）或系统连接设备无广播时为 undefined。 */
+	batteryStatus?: number;
 	/** 可确认属于当前SDK构建版本的系统连接设备为true。 */
 	systemConnected: boolean;
 	[key: string]: unknown;
@@ -494,6 +497,13 @@ export declare class RingSdk {
 	/** 喝水提醒(协议2.2.19)：需功能表 supportDrink。 */
 	setDrinkRemind(config: MonitorSchedule): Promise<void>;
 	readDrinkRemind(): Promise<ReminderInfo>;
+	/**
+	 * 即时震动控制(协议2.3.3)：需功能表 supportVibrationControl。
+	 * 单轮 mode 1..15；持续/节奏循环 mode 255；节奏循环填写 groupCount(1..15)、
+	 * frequency(1..10次/秒)、pause(1..255,单位100ms)，不使用循环时全 0；
+	 * strength 0 停止震动并忽略循环参数，1..3 弱到强。参数非法抛 Error。
+	 */
+	controlVibration(mode: number, strength: number, groupCount?: number, frequency?: number, pause?: number): Promise<void>;
 	/**
 	 * 设备身份认证(协议2.1.5)：透传云端挑战值，返回设备 HMAC-SHA256 应答(64位hex)。
 	 * 挑战值须为64个hex字符(32字节，兼容分隔符)；应答校验由业务与云端完成。

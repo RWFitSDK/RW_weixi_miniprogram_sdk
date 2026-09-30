@@ -262,6 +262,7 @@ Page({
     if (id === "screenControl") return this.manageScreenControl(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
     if (id === "deviceChallenge") return this.runDeviceChallenge(sdk);
+    if (id === "vibrationControl") return this.runVibrationControl(sdk);
 
     const operations = {
       dnd: {
@@ -415,6 +416,20 @@ Page({
       content: `设备应答:\n${response}\n\n实际业务中挑战值由云端下发, 应答交回云端比对。`,
       showCancel: false,
     });
+  },
+
+  async runVibrationControl(sdk) {
+    const index = await choose(["单轮：中强度 3 次", "持续：中强度", "循环：3次·2次/秒·停1秒", "停止震动"]);
+    if (index === null) return;
+    const presets = [
+      [3, 2, 0, 0, 0],
+      [255, 2, 0, 0, 0],
+      [255, 2, 3, 2, 10],
+      [255, 0, 0, 0, 0],
+    ];
+    const [mode, strength, groupCount, frequency, pause] = presets[index];
+    await sdk.controlVibration(mode, strength, groupCount, frequency, pause);
+    wx.showToast({ title: index === 3 ? "已停止" : "指令已发送", icon: "success" });
   },
 
   async manageSensorRawPpg(sdk) {

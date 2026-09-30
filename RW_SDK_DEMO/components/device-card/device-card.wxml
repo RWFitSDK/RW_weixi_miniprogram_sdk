@@ -10,7 +10,7 @@
         <text class="device-address">MAC：{{macAddressText || '连接后获取'}}</text>
         <text class="device-id">deviceId：{{deviceIdText}}</text>
       </view>
-      <text class="device-power">电量 {{powerText}}</text>
+      <text class="device-power">电量 {{powerText}}{{batteryStatusText ? ' · ' + batteryStatusText : ''}}</text>
     </view>
   </view>
   <text class="arrow">›</text>

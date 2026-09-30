@@ -87,6 +87,13 @@ const SETTING_TYPES = [
     subtitle: "设置计数提醒间隔",
     support: (m) => m.supportCountReminder,
   },
+  {
+    id: "vibrationControl",
+    title: "震动控制",
+    subtitle: "单轮/持续/节奏循环/停止",
+    support: (m) => m.supportVibrationControl,
+    action: true,
+  },
   { id: "fallDetect", title: "跌落提醒", subtitle: "开启或关闭跌落检测", support: (m) => m.supportFallDetect },
   { id: "sedentary", title: "久坐提醒", subtitle: "设置久坐提醒间隔", support: (m) => m.supportSedentary },
   { id: "drink", title: "喝水提醒", subtitle: "设置喝水提醒间隔", support: (m) => m.supportDrink },

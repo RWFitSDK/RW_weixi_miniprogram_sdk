@@ -360,6 +360,7 @@ class BleManager {
         localName: target.localName || "",
         supportMenu,
         powerLevel: power ? power.level : null,
+        charging: power ? power.charging === true : false,
         firmware: firmware || null,
         boundAt: previousBoundDevice && previousBoundDevice.boundAt
           ? previousBoundDevice.boundAt
@@ -431,7 +432,7 @@ class BleManager {
   async refreshPower() {
     if (!this.sdk) throw new Error("设备未连接");
     const power = await this.sdk.readPower();
-    this.updateBoundDevice({ powerLevel: power.level });
+    this.updateBoundDevice({ powerLevel: power.level, charging: power.charging === true });
     return power;
   }
 
@@ -622,7 +623,7 @@ class BleManager {
   handleDeviceEvent(event) {
     if (!event) return;
     if (event.type === "power") {
-      this.updateBoundDevice({ powerLevel: event.level });
+      this.updateBoundDevice({ powerLevel: event.level, charging: event.charging === true });
       return;
     }
     if (event.type === "muslimCount") {
