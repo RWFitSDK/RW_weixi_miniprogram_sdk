@@ -63,6 +63,7 @@ export interface SupportMenu {
 	supportDeviceChallenge: boolean;
 	supportDevicePasswordAuth: boolean;
 	supportScreenControl: boolean;
+	supportCustomNumberDisplay: boolean;
 	activityDataInterval: number;
 	healthDataSwitchEnabled: boolean;
 	step: boolean;
@@ -257,7 +258,9 @@ export type DeviceEvent = ({
 } | {
 	type: "camera";
 	action: number;
-} | {
+}
+/** keyType: 1触摸/2跌落/3 SOS/4连续点击；keyType=1且touchType=6为Release(长按后松手)。连续点击时touchType为次数(1-9)，SOS时不使用并返回0。 */
+ | {
 	type: "touch";
 	keyType: number;
 	touchType: number;
@@ -505,6 +508,12 @@ export declare class RingSdk {
 	 */
 	controlVibration(mode: number, strength: number, groupCount?: number, frequency?: number, pause?: number): Promise<void>;
 	/**
+	 * 自定义数字显示，需功能表 supportCustomNumberDisplay。
+	 * 0..9999，最多4位；小于0按0，大于9999按9999，小数取整数部分。
+	 * 显示3秒，再次调用更新数字并重新计时。Promise在设备应答后完成。
+	 */
+	showCustomNumber(number: number): Promise<void>;
+	/**
 	 * 设备身份认证(协议2.1.5)：透传云端挑战值，返回设备 HMAC-SHA256 应答(64位hex)。
 	 * 挑战值须为64个hex字符(32字节，兼容分隔符)；应答校验由业务与云端完成。
 	 */
@@ -539,6 +548,8 @@ export declare class RingSdk {
 	deleteAllAlarms(): Promise<void>;
 	setRememberEnabled(enabled: boolean): Promise<void>;
 	getRememberEnabled(): Promise<boolean>;
+	/** 清零当前赞念计数，需设备支持赞念功能；接口名与Android一致。 */
+	setMuslimCountClean(): Promise<void>;
 	setMuslimTimeDisplayMode(mode: 1 | 2 | 3): Promise<void>;
 	getMuslimTimeDisplayMode(): Promise<number>;
 	setAlarmVibrationDuration(count: number): Promise<void>;

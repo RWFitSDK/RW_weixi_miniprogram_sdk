@@ -622,6 +622,13 @@ class BleManager {
 
   handleDeviceEvent(event) {
     if (!event) return;
+    if (event.type === "touch") {
+      if (event.keyType === 3) this.log("SOS 事件 keyType=3");
+      else if (event.keyType === 4) this.log(`连续点击 keyType=4 count=${event.touchType}`);
+      else if (event.keyType === 1 && event.touchType === 6) this.log("Release 事件 keyType=1 touchType=6");
+      else this.log(`触摸事件 keyType=${event.keyType} touchType=${event.touchType}`);
+      return;
+    }
     if (event.type === "power") {
       this.updateBoundDevice({ powerLevel: event.level, charging: event.charging === true });
       return;

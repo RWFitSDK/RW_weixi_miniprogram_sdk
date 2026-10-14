@@ -194,6 +194,7 @@ const latestMenu = await sdk.readFunctionList();
 | `supportDevicePasswordAuth` | 设备密码认证 |
 | `supportDeviceChallenge` | 设备身份认证 |
 | `supportScreenControl` | 即时屏幕亮灭控制 |
+| `supportCustomNumberDisplay` | 自定义数字显示（3.2.1.32） |
 | `supportUnitSetting` | 公制/英制单位设置 |
 | `supportSedentary` | 久坐提醒 |
 | `supportDrink` | 喝水提醒 |
@@ -302,12 +303,20 @@ await sdk.setWearHand(true);  // 右手
 
 ##### 3.2.1.8 启动与关闭拍照
 
-功能位：`takePhoto`。小程序需自行实现相机页面；SDK 负责通知。
+功能位：`takePhoto`。
+
+小程序需使用相机组件自行实现相机页面, 不能直接拉起手机系统相机实现戒指拍照控制. SDK负责相机模式控制与拍照事件通知, 拍照及保存到手机相册由小程序完成.
+
+使用流程:
+
+1. 进入相机页面时, 通过 `sdk.onDeviceEvent()` 监听设备事件, 调用 `sdk.controlCamera(1)` 通知戒指进入相机控制模式.
+2. 用户在戒指上触发拍照手势后, 收到 `type="camera"`、`action=2` 的事件; 小程序调用相机组件拍照, 并将照片保存到手机相册.
+3. 退出相机页面时, 调用 `sdk.controlCamera(0)` 通知戒指退出相机控制模式, 并调用监听返回的函数取消监听.
 
 ```js
 const unsubscribe = sdk.onDeviceEvent((event) => {
   if (event.type === "camera" && event.action === 2) {
-    // 调用小程序相机逻辑拍照
+    // 调用小程序相机组件拍照, 并将照片保存到手机相册
   }
 });
 
@@ -475,7 +484,7 @@ await sdk.setAlarmVibrationDuration(2); // 0-6，0 不震动
 
 ##### 3.2.1.21 设备主动推送监听
 
-> 设备主动事件的统一监听通道：电量推送、录音状态推送、触摸/跌落事件等按 `event.type` 分发。
+> 设备主动事件的统一监听通道：电量推送、录音状态推送、触摸/跌落/SOS/连续点击事件等按 `event.type` 分发。
 
 `sdk.onDeviceEvent(listener)` 返回注销函数，退出相关页面时调用：
 
@@ -483,9 +492,10 @@ await sdk.setAlarmVibrationDuration(2); // 0-6，0 不震动
 const off = sdk.onDeviceEvent((event) => {
   switch (event.type) {
     case "touch":
-      // keyType: 1 触摸，2 跌落（需开启跌落提醒 3.2.1.24）
-      // touchType: 1 单击、2 双击、3 三击、4 长按、5 甩动；跌落时默认 1
-      console.log(event.keyType, event.touchType);
+      // keyType: 1 触摸，2 跌落（需开启跌落提醒 3.2.1.24），3 SOS，4 连续点击
+      // touchType: 触摸时 1 单击、2 双击、3 三击、4 长按、5 甩动、6 Release(长按后松手)；跌落时默认1；SOS时不使用；连续点击时为次数(1-9)
+      if (event.keyType === 1 && event.touchType === 6) console.log("Release");
+      else console.log(event.keyType, event.touchType);
       break;
     case "power":
       console.log(event.level, event.charging);
@@ -504,7 +514,7 @@ const off = sdk.onDeviceEvent((event) => {
 | `power` | 电量与充电状态 | `level` / `voltage` / `charging` | 见 3.2.1.4 |
 | `recordStatus` | 录音状态推送 | `status`（字段同 `RecordStatus`） | 见 3.2.5.2 |
 | `muslimCount` | 赞念计数实时上报 | `count`（本次计数）、`timestamp`（Unix 毫秒） | 用户在设备上按键计数时上报，无需开启检测；见 3.2.1.15 |
-| `touch` | 触摸/跌落事件 | `keyType`（`1` 触摸，`2` 跌落）、`touchType`（`1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动；跌落时默认 `1`） | 需设备固件支持；跌落提醒需开启 3.2.1.24 |
+| `touch` | 触摸/跌落/SOS/连续点击事件 | `keyType`：`1` 触摸，`2` 跌落，`3` SOS，`4` 连续点击。<br>`touchType`：触摸时 `1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动、`6` Release(长按后松手)；跌落时默认 `1`；SOS时不使用；连续点击时表示次数(1-9) | 需设备固件支持；跌落提醒需开启 3.2.1.24 |
 
 触摸与跌落事件需设备固件支持。
 
@@ -649,6 +659,31 @@ await sdk.controlVibration(3, 2);                 // 中强度震动3次
 await sdk.controlVibration(255, 2);               // 持续震动
 await sdk.controlVibration(255, 2, 3, 2, 10);     // 每组3次、2次/秒、组间停顿1秒
 await sdk.controlVibration(255, 0);               // 停止震动
+```
+
+##### 3.2.1.32 自定义数字显示
+
+将小程序指定的数字显示到设备，显示3秒后退出。再次调用时更新数字并重新计时3秒，数字的含义及解读由小程序自行处理。
+
+功能位：`supportCustomNumberDisplay`。仅支持该能力的设备可使用。
+
+方法说明：
+
+`showCustomNumber(number: number): Promise<void>`
+
+| 参数 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| number | number | 显示数字，范围0～9999，最多4位；小于0按0处理，大于9999按9999处理，小数取整数部分 |
+
+操作成功后 Promise 完成，失败时进入 `catch`。
+
+```js
+try {
+  await sdk.showCustomNumber(627);
+  console.log("自定义数字显示成功");
+} catch (error) {
+  console.error("自定义数字显示失败", error);
+}
 ```
 
 #### 3.2.2 健康数据同步（实时单次与全天检测）
@@ -1308,6 +1343,13 @@ const off = sdk.onDeviceEvent((event) => {
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20261012** (2026.10.12)
+
+- 添加自定义数字显示接口 `showCustomNumber`(3.2.1.32)
+- 添加赞念计数清零接口 `setMuslimCountClean`
+- 设备主动推送监听新增 SOS 与连续点击次数通知(3.2.1.21)
+- 设备主动推送监听新增 Release(长按后松手)事件，`keyType=1`、`touchType=6`(3.2.1.21)
 
 **RW_SDK_V2.0.0_20260930** (2026.09.30)
 - 扫描设备新增广播电量状态 `batteryStatus`(3.1.1)
