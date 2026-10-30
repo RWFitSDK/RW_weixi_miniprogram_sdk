@@ -9,10 +9,16 @@ export interface FirmwareInfo {
 	screenWidth?: number;
 	screenHeight?: number;
 	deviceModel?: string;
+	/** 客户型号，未提供时使用原设备型号。 */
+	customerModel?: string;
 	uiVersion?: string;
+	/** 产品形态: 0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表; -1 未提供或不支持(旧回包无该字节)。 */
+	deviceForm: number;
 }
 /** 设备功能配置表的只读模型。 */
 export interface SupportMenu {
+	supportPpgSampleRate: boolean;
+	supportCustomerModel: boolean;
 	supportUnitSetting: boolean;
 	addressBook: boolean;
 	msgNotification: boolean;
@@ -56,6 +62,8 @@ export interface SupportMenu {
 	supportPPGMonitoring: boolean;
 	supportTemperatureMonitoring: boolean;
 	supportRecording: boolean;
+	/** 是否支持计数识别开关与状态查询(协议2.3.5, 功能表 offset 28 bit1)。 */
+	supportCountControl: boolean;
 	supportMeasureUnit: boolean;
 	supportSedentary: boolean;
 	supportDrink: boolean;
@@ -147,6 +155,8 @@ export interface RecordStatus {
 	duration: number;
 	totalCapacity: number;
 	remainingCapacity: number;
+	/** 是否为实时录音(协议 v1.29 第 21 字节); 旧固件 20 字节回包为 false。 */
+	realtime: boolean;
 }
 /** 录音文件列表项(fileId/fileSize/duration 各 4 字节大端, 时间为 2000 纪元大端)。 */
 export interface RecordFileItem {
@@ -251,6 +261,17 @@ export type DeviceEvent = ({
 } & PowerInfo) | {
 	type: "recordStatus";
 	status: RecordStatus;
+}
+/** 实时录音音频(协议3.3): sequence 为 0-255 循环序号(可用于丢包/乱序检测), audioData 为原始音频字节。 */
+ | {
+	type: "recordRealtimeData";
+	sequence: number;
+	audioData: Uint8Array;
+}
+/** 计数识别状态变化(协议2.3.5, 0x21推送): armed=true 开启(Arm), false 关闭(Disarm)。 */
+ | {
+	type: "countControl";
+	armed: boolean;
 } | {
 	type: "muslimCount";
 	count: number;
@@ -402,6 +423,8 @@ export interface RingSdkScanDevice {
 	macAddress: string;
 	/** 广播 offset 13 电量状态：0 未充电，1 充电中，2 充满；广播未携带、为非状态值（如旧固件 0x80）或系统连接设备无广播时为 undefined。 */
 	batteryStatus?: number;
+	/** 广播 offset 14 产品形态：0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表；广播未携带或未知值为 -1，系统连接设备无广播时沿用上次值。 */
+	deviceForm?: number;
 	/** 可确认属于当前SDK构建版本的系统连接设备为true。 */
 	systemConnected: boolean;
 	[key: string]: unknown;
@@ -513,13 +536,35 @@ export declare class RingSdk {
 	 * 显示3秒，再次调用更新数字并重新计时。Promise在设备应答后完成。
 	 */
 	showCustomNumber(number: number): Promise<void>;
+	/** 设置 PPG 采样率，单位 Hz。需功能表 supportPpgSampleRate。 */
+	setPpgSampleRate(sampleRate: number): Promise<void>;
+	/** 获取设备当前 PPG 采样率，单位 Hz。 */
+	getPpgSampleRate(): Promise<number>;
+	/** 设置客户型号，最多8个字符，仅支持英文字母和数字。需功能表 supportCustomerModel。 */
+	setCustomerModel(model: string): Promise<void>;
+	/** 获取当前客户型号，默认与原设备型号一致。 */
+	getCustomerModel(): Promise<string>;
 	/**
 	 * 设备身份认证(协议2.1.5)：透传云端挑战值，返回设备 HMAC-SHA256 应答(64位hex)。
 	 * 挑战值须为64个hex字符(32字节，兼容分隔符)；应答校验由业务与云端完成。
 	 */
 	deviceChallenge(challengeHex: string): Promise<string>;
-	/** 开始/停止录音。返回设备应答状态(0=成功, 非 0 失败; 纯 ACK 时为 undefined); 实际录制状态经 getRecordStatus 或 recordStatus 推送获取。需功能表 supportRecording。 */
+	/**
+	 * 开始/停止录音。返回设备应答(协议 v1.29 为操作后的实际录音状态: 1=录音中, 0=空闲; 旧固件 v1.28 为 0=成功/0x10=失败, SDK 原样透传)。
+	 * 实际录制状态以 getRecordStatus 或 recordStatus 推送为准。需功能表 supportRecording。
+	 */
 	recordControl(start: boolean): Promise<number | undefined>;
+	/**
+	 * 开始/停止实时录音(协议 v1.29 3.1): 启停+实时标志双字节, 原 recordControl 保持不变。
+	 * 返回设备应答(操作后的实际录音状态: 1=录音中, 0=空闲; SDK 原样透传), 实际状态以
+	 * getRecordStatus 或 recordStatus 推送为准; 音频不经返回值, 通过 onDeviceEvent 的
+	 * recordRealtimeData 事件接收(sequence 0-255 循环序号 + audioData 原始字节)。需功能表 supportRecording。
+	 */
+	recordRealtimeControl(start: boolean): Promise<number | undefined>;
+	/** 计数识别开关(协议2.3.5): true=开启(Arm) false=关闭(Disarm), 切换不清零累计计数; 返回设备执行结果(0=成功, 0x10=失败)。需功能表 supportCountControl; 状态变化经 countControl 事件推送。 */
+	setCountControl(armed: boolean): Promise<number | undefined>;
+	/** 查询计数识别状态(协议2.3.5): true=Arm false=Disarm; 与设置操作请等待上一次调用完成后再发起。 */
+	getCountControl(): Promise<boolean>;
 	/** 查询录音状态与录音区容量(总容量/剩余容量, 字节)。 */
 	getRecordStatus(): Promise<RecordStatus>;
 	/** 获取录音文件列表(设备分页推送, SDK 循环索取并聚合为完整列表; 并发调用共享同一次读取)。 */

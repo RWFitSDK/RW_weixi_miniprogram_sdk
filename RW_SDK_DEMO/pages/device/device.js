@@ -117,10 +117,18 @@ Page({
     this.deviceEventSdk = sdk;
     if (!sdk) return;
     this.deviceEventUnsubscribe = sdk.onDeviceEvent((event) => {
+      // 实时音频为高频推送, 逐包打印会刷屏并拖慢调试器; 本页不消费音频, 直接跳过
+      if (event.type === "recordRealtimeData") return;
       console.log("onDeviceEvent", event);
-      if (event.type !== "sensorStopped") return;
-      console.log("device stopped sensor", event.reason);
-      this.updateSettingValue("sensorRawPPG", "采集完成");
+      if (event.type === "sensorStopped") {
+        console.log("device stopped sensor", event.reason);
+        this.updateSettingValue("sensorRawPPG", "采集完成");
+        return;
+      }
+      // 计数识别状态推送(含小程序控制与设备自动切换)自动更新条目
+      if (event.type === "countControl") {
+        this.updateSettingValue("countControl", event.armed ? "已开启(Arm)" : "已关闭(Disarm)");
+      }
     });
   },
 
@@ -260,6 +268,10 @@ Page({
     if (id === "alarm") return this.editAlarm(sdk);
     if (id === "sensorRawPPG") return this.manageSensorRawPpg(sdk);
     if (id === "screenControl") return this.manageScreenControl(sdk);
+    if (id === "customNumberDisplay") return this.showCustomNumber(sdk);
+    if (id === "countControl") return this.manageCountControl(sdk);
+    if (id === "ppgSampleRate") return this.managePpgSampleRate(sdk);
+    if (id === "customerModel") return this.manageCustomerModel(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
     if (id === "deviceChallenge") return this.runDeviceChallenge(sdk);
     if (id === "vibrationControl") return this.runVibrationControl(sdk);
@@ -404,6 +416,65 @@ Page({
     await sdk.setScreenOn(isOn);
     this.updateSettingValue("screenControl", isOn ? "已亮屏" : "已息屏");
     wx.showToast({ title: "设置成功", icon: "success" });
+  },
+
+  /** 计数识别开关(协议2.3.5): 设置成功后回查实际状态; 状态推送也会自动更新此条目。 */
+  async manageCountControl(sdk) {
+    const action = await choose(["查询当前状态", "开启计数识别(Arm)", "关闭计数识别(Disarm)"]);
+    if (action === null) return;
+    if (action > 0) {
+      const armed = action === 1;
+      const result = await sdk.setCountControl(armed);
+      if (result !== undefined && result !== 0) throw new Error(`设备返回状态 ${result}`);
+    }
+    const enabled = await sdk.getCountControl();
+    const text = enabled ? "已开启(Arm)" : "已关闭(Disarm)";
+    this.updateSettingValue("countControl", text);
+    wx.showToast({ title: text, icon: "none" });
+  },
+
+  async showCustomNumber(sdk) {
+    const input = await editable("自定义数字显示", "请输入 0～9999，例如 627");
+    if (!input) return;
+    const value = Number(input);
+    if (!Number.isFinite(value)) throw new Error("请输入有效数字");
+    const number = Math.max(0, Math.min(9999, Math.trunc(value)));
+    await sdk.showCustomNumber(number);
+    this.updateSettingValue("customNumberDisplay", `上次发送：${number}`);
+    bleManager.log(`自定义数字显示成功：${number}`);
+    wx.showToast({ title: "发送成功", icon: "success" });
+  },
+
+  async managePpgSampleRate(sdk) {
+    const action = await choose(["查询采样率", "设置采样率"]);
+    if (action === null) return;
+    if (action === 1) {
+      const input = await editable("PPG 采样率", "单位 Hz，例如 100 或 200");
+      if (!input) return;
+      const value = Number(input);
+      if (!Number.isFinite(value)) throw new Error("请输入有效数字");
+      await sdk.setPpgSampleRate(value);
+      bleManager.log(`设置 PPG 采样率成功，输入：${value} Hz`);
+    }
+    const value = await sdk.getPpgSampleRate();
+    this.updateSettingValue("ppgSampleRate", `${value} Hz`);
+    bleManager.log(`当前 PPG 采样率：${value} Hz`);
+    wx.showToast({ title: `${value} Hz`, icon: "none" });
+  },
+
+  async manageCustomerModel(sdk) {
+    const action = await choose(["查询客户型号", "设置客户型号"]);
+    if (action === null) return;
+    if (action === 1) {
+      const model = await editable("客户型号", "最多8个字符，仅支持英文字母和数字");
+      if (!model) return;
+      await sdk.setCustomerModel(model);
+      bleManager.log(`设置客户型号成功，输入：${model}`);
+    }
+    const model = await sdk.getCustomerModel();
+    this.updateSettingValue("customerModel", model || "未设置");
+    bleManager.log(`当前客户型号：${model}`);
+    wx.showToast({ title: model || "未设置", icon: "none" });
   },
 
   async runDeviceChallenge(sdk) {

@@ -31,6 +31,7 @@
         <view class="signal-text">{{item.signalText}}</view>
         <view wx:if="{{!item.systemConnected}}" class="signal-value">{{item.RSSI}} dBm</view>
         <view wx:if="{{item.batteryStatusText}}" class="signal-value">{{item.batteryStatusText}}</view>
+        <view wx:if="{{item.deviceFormText}}" class="signal-value">{{item.deviceFormText}}</view>
       </view>
       <view wx:if="{{connectingId === item.deviceId}}" class="connecting-dot"></view>
       <text wx:else class="chevron">›</text>

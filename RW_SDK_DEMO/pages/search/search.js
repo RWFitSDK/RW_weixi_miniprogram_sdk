@@ -11,6 +11,10 @@ function presentDevices(devices) {
     macAddressText: device.macAddress || "未从广播获取",
     deviceIdText: device.deviceId,
     batteryStatusText: ({ 0: "未充电", 1: "充电中", 2: "充满" })[device.batteryStatus] || "",
+    deviceFormText: ({
+      0: "无屏戒指", 1: "有屏戒指", 2: "无屏手链", 3: "有屏手链",
+      4: "无屏手环", 5: "有屏手环", 6: "手表"
+    })[device.deviceForm] || "",
     signalText: device.systemConnected
       ? "已系统配对"
       : device.RSSI >= -55 ? "信号强" : device.RSSI >= -72 ? "信号良好" : "信号较弱"

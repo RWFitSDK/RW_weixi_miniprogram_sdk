@@ -29,17 +29,23 @@ function confirmModal(title, content) {
 Page({
   data: {
     connected: false,
-    status: { recording: false, duration: 0, totalCapacity: 0, remainingCapacity: 0 },
+    status: { recording: false, duration: 0, totalCapacity: 0, remainingCapacity: 0, realtime: false },
+    realtimeMode: false,
+    realtimeStats: { packets: 0, bytes: 0, sequence: "--" },
     capacityText: "--",
     files: [],
     loadingStatus: false,
     loadingFiles: false,
     toggling: false,
+    togglingRealtime: false,
     downloading: null,
   },
 
   unsubscribe: null,
   pushUnsubscribe: null,
+  /** 实时音频为高频推送: 先在内存累计, 每 500ms 刷一次界面, 避免逐包 setData。 */
+  realtimeCounters: { packets: 0, bytes: 0, sequence: null },
+  realtimeFlushTimer: null,
   /** 页面存活(onLoad 置 true, onUnload 置 false): 异步返回后不再更新已销毁页面。 */
   alive: true,
   /** 页面可见(onShow 置 true, onHide 置 false): 被覆盖时不再弹提示。 */
@@ -59,6 +65,7 @@ Page({
     if (!status) return;
     this.syncState({
       status,
+      realtimeMode: status.recording && !!status.realtime,
       capacityText: `${formatBytes(status.remainingCapacity)} / ${formatBytes(status.totalCapacity)}`,
     });
   },
@@ -108,21 +115,41 @@ Page({
     if (!sdk) return;
     this.pushUnsubscribe = sdk.onDeviceEvent((event) => {
       if (event.type === "recordStatus") this.applyRecordStatus(event.status);
+      if (event.type === "recordRealtimeData") this.onRealtimeAudio(event);
     });
+  },
+
+  /** 实时音频只统计不保存: 包数/字节/最新序号, 节流刷新界面。 */
+  onRealtimeAudio(event) {
+    this.realtimeCounters.packets += 1;
+    this.realtimeCounters.bytes += event.audioData.length;
+    this.realtimeCounters.sequence = event.sequence;
+    if (this.realtimeFlushTimer) return;
+    this.realtimeFlushTimer = setTimeout(() => {
+      this.realtimeFlushTimer = null;
+      this.syncState({ realtimeStats: { ...this.realtimeCounters, sequence: String(this.realtimeCounters.sequence ?? "--") } });
+    }, 500);
   },
 
   unsubscribeRecordPush() {
     this.pushUnsubscribe && this.pushUnsubscribe();
     this.pushUnsubscribe = null;
+    if (this.realtimeFlushTimer) {
+      clearTimeout(this.realtimeFlushTimer);
+      this.realtimeFlushTimer = null;
+    }
   },
 
+  /** 本次查询成功返回 true; 失败或已有查询在途时返回 false, 调用方不应再用旧状态做后续判断。 */
   async refreshStatus() {
-    if (this.data.loadingStatus) return;
+    if (this.data.loadingStatus) return false;
     this.syncState({ loadingStatus: true });
     try {
       this.applyRecordStatus(await requireSdk().getRecordStatus());
+      return true;
     } catch (error) {
       this.notify(error.message || "获取状态失败");
+      return false;
     } finally {
       this.syncState({ loadingStatus: false });
     }
@@ -151,16 +178,59 @@ Page({
   async toggleRecord() {
     if (this.data.toggling) return;
     this.syncState({ toggling: true });
+    const start = !this.data.status.recording;
     try {
-      // 应答 0=成功、非 0 失败; 不依据本地旧状态提示, 实际录制状态由查询/推送更新
-      const status = await requireSdk().recordControl(!this.data.status.recording);
-      if (status !== undefined && status !== 0) throw new Error(`设备返回状态 ${status}`);
-      this.notify("指令执行成功", "success");
-      await this.refreshStatus();
+      // 应答为操作后的实际录音状态(1=录音中, 0=空闲; 旧固件为 0=成功/0x10=失败):
+      // 0/1 之外的值是明确失败码直接报错; 0/1 不当作成功凭证, 提示以查询到的实际状态为准。
+      const reply = await requireSdk().recordControl(start);
+      if (reply !== undefined && reply !== 0 && reply !== 1) {
+        throw new Error(`设备返回失败码 0x${reply.toString(16)}`);
+      }
+      // 查询失败已提示"获取状态失败", 不再用旧状态判断, 避免覆盖错误提示
+      if (!(await this.refreshStatus())) return;
+      this.notify(!!this.data.status.recording === start
+        ? (start ? "录音已开始" : "录音已停止")
+        : (start ? "设备未开始录音" : "设备未停止录音"),
+        !!this.data.status.recording === start ? "success" : "none");
     } catch (error) {
       this.notify(error.message || "操作失败");
     } finally {
       this.syncState({ toggling: false });
+    }
+  },
+
+  /** 实时录音(协议 v1.29): 音频经 recordRealtimeData 事件推送, 此处只演示接收统计。 */
+  async toggleRealtimeRecord() {
+    if (this.data.togglingRealtime) return;
+    // 普通录音进行中不直接切换模式; 先停止, 再启动实时录音
+    if (this.data.status.recording && !this.data.realtimeMode) {
+      this.notify("请先停止普通录音");
+      return;
+    }
+    this.syncState({ togglingRealtime: true });
+    const start = !this.data.status.recording;
+    try {
+      if (start) {
+        this.realtimeCounters = { packets: 0, bytes: 0, sequence: null };
+        this.syncState({ realtimeStats: { packets: 0, bytes: 0, sequence: "--" } });
+      }
+      // 应答为操作后的实际录音状态(启动成功返回 1 录音中, 启动未生效返回 0 空闲):
+      // 0/1 之外的值是明确失败码直接报错; 启动/停止是否生效以查询到的实际状态为准。
+      const reply = await requireSdk().recordRealtimeControl(start);
+      if (reply !== undefined && reply !== 0 && reply !== 1) {
+        throw new Error(`设备返回失败码 0x${reply.toString(16)}`);
+      }
+      // 查询失败已提示"获取状态失败", 不再用旧状态判断, 避免覆盖错误提示
+      if (!(await this.refreshStatus())) return;
+      const started = start ? this.data.realtimeMode : !this.data.status.recording;
+      this.notify(started
+        ? (start ? "实时录音已启动" : "实时录音已停止")
+        : (start ? "设备未开始实时录音" : "设备未停止录音"),
+        started ? "success" : "none");
+    } catch (error) {
+      this.notify(error.message || "操作失败");
+    } finally {
+      this.syncState({ togglingRealtime: false });
     }
   },
 

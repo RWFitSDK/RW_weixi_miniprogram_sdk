@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20260930`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20261028`。
 
 #### 1.1 适用平台与语言
 
@@ -77,6 +77,7 @@ const scan = await RingSdk.startScan({
 | `RSSI` | 信号强度（dBm）；系统连接设备固定为 `0` |
 | `macAddress` | 广播解析出的 BLE MAC；未携带时回退为其它来源，可能为空字符串 |
 | `batteryStatus` | 广播携带的电量状态：`0` 未充电、`1` 充电中、`2` 充满；广播未携带时为 `undefined` |
+| `deviceForm` | 广播携带的产品形态：`0` 无屏戒指、`1` 有屏戒指、`2` 无屏手链、`3` 有屏手链、`4` 无屏手环、`5` 有屏手环、`6` 手表；广播未携带或为未知值时为 `-1` |
 | `systemConnected` | 当前SDK构建版本对应的系统连接设备为 `true` |
 
 ##### 3.1.2 停止搜索
@@ -195,11 +196,14 @@ const latestMenu = await sdk.readFunctionList();
 | `supportDeviceChallenge` | 设备身份认证 |
 | `supportScreenControl` | 即时屏幕亮灭控制 |
 | `supportCustomNumberDisplay` | 自定义数字显示（3.2.1.32） |
+| `supportCountControl` | 计数识别开关与状态查询（3.2.1.33） |
 | `supportUnitSetting` | 公制/英制单位设置 |
 | `supportSedentary` | 久坐提醒 |
 | `supportDrink` | 喝水提醒 |
 | `supportVibrationControl` | 自定义震动控制（3.2.1.31） |
 | `supportRecording` | 录音 |
+| `supportCustomerModel` | 客户型号设置与获取（3.2.1.34） |
+| `supportPpgSampleRate` | PPG 采样率设置与获取（5.2.5.4） |
 
 调用相关接口前应先判断相应功能位。
 
@@ -210,7 +214,7 @@ const latestMenu = await sdk.readFunctionList();
 ##### 3.2.1.0 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20260930"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20261028"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -255,6 +259,8 @@ console.log(firmware);
 | `screenType` | 0 方屏、1 圆屏 |
 | `screenWidth` / `screenHeight` | 屏幕宽高 |
 | `uiVersion` | UI 版本 |
+| `deviceForm` | 产品形态：`0` 无屏戒指、`1` 有屏戒指、`2` 无屏手链、`3` 有屏手链、`4` 无屏手环、`5` 有屏手环、`6` 手表；`-1` 未提供或不支持（旧固件回包无该字节） |
+| `customerModel` | 客户型号；未提供时与原设备型号一致 |
 
 固件升级前应读取并核对当前设备型号与固件版本。
 
@@ -513,7 +519,9 @@ const off = sdk.onDeviceEvent((event) => {
 | --- | --- | --- | --- |
 | `power` | 电量与充电状态 | `level` / `voltage` / `charging` | 见 3.2.1.4 |
 | `recordStatus` | 录音状态推送 | `status`（字段同 `RecordStatus`） | 见 3.2.5.2 |
-| `muslimCount` | 赞念计数实时上报 | `count`（本次计数）、`timestamp`（Unix 毫秒） | 用户在设备上按键计数时上报，无需开启检测；见 3.2.1.15 |
+| `recordRealtimeData` | 实时录音音频 | `sequence`（0-255 循环序号，255 后回到0，可检查丢包/顺序）、`audioData`（当前包原始 Opus 压缩音频） | 实时录音中设备主动推送；见 3.2.5.7 |
+| `countControl` | 计数识别状态 | `armed`：`true` 开启(Arm)、`false` 关闭(Disarm) | 开关状态变化时推送（含小程序控制与设备自动切换）；见 3.2.1.33 |
+| `muslimCount` | 赞念计数实时上报 | `count`（本次计数）、`timestamp`（Unix 毫秒）；一帧多项时逐项上报，每项一条事件 | 用户在设备上按键计数时上报，无需开启检测；见 3.2.1.15 |
 | `touch` | 触摸/跌落/SOS/连续点击事件 | `keyType`：`1` 触摸，`2` 跌落，`3` SOS，`4` 连续点击。<br>`touchType`：触摸时 `1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动、`6` Release(长按后松手)；跌落时默认 `1`；SOS时不使用；连续点击时表示次数(1-9) | 需设备固件支持；跌落提醒需开启 3.2.1.24 |
 
 触摸与跌落事件需设备固件支持。
@@ -685,6 +693,56 @@ try {
   console.error("自定义数字显示失败", error);
 }
 ```
+
+##### 3.2.1.33 计数识别开关与状态查询
+
+开启或关闭计数识别，切换不清零累计计数。功能位：`supportCountControl`。仅支持该能力的设备可使用。
+
+方法说明：
+
+`setCountControl(armed: boolean): Promise<number | undefined>`
+
+`getCountControl(): Promise<boolean>`
+
+| 参数/返回 | 说明 |
+| ---- | ---- |
+| armed | `true`：开启(Arm)；`false`：关闭(Disarm) |
+| setCountControl 返回 | 设备执行结果：`0` 成功，`0x10` 失败（个别固件无应答数据时为 `undefined`） |
+| getCountControl 返回 | 当前开关状态：`true` = Arm，`false` = Disarm；回包非法时 Promise 抛错 |
+
+等待上一次操作完成后再进行下一次设置或查询。
+
+```js
+const result = await sdk.setCountControl(true);
+if (result === 0) console.log("计数识别已开启");
+
+const armed = await sdk.getCountControl();
+console.log("计数识别状态:", armed);
+```
+
+状态变化通过 `onDeviceEvent` 的 `countControl` 事件推送（`armed` 布尔）；实时计数经 `muslimCount` 事件上报。
+
+##### 3.2.1.34 客户型号设置与获取
+
+设置或查询客户型号，默认与原设备型号一致。功能位：`supportCustomerModel`。
+
+方法说明：
+
+`setCustomerModel(model: string): Promise<void>`
+
+`getCustomerModel(): Promise<string>`
+
+| 参数 | 说明 |
+| --- | --- |
+| model | 客户型号，最多8个字符，仅支持英文字母和数字 |
+
+```js
+await sdk.setCustomerModel("MODEL001");
+const model = await sdk.getCustomerModel();
+console.log("客户型号:", model);
+```
+
+获取固件信息时也可通过 `FirmwareInfo.customerModel` 读取客户型号。固件升级仍使用原设备型号 `deviceModel` 匹配固件。
 
 #### 3.2.2 健康数据同步（实时单次与全天检测）
 
@@ -1173,11 +1231,11 @@ const reports = await sdk.getWorkoutReports();
 ##### 3.2.5.1 开始/停止录音
 
 ```js
-const result = await sdk.recordControl(true);   // 开始录音, 返回 0=成功、非 0 失败
-await sdk.recordControl(false);                 // 停止录音
+const state = await sdk.recordControl(true);   // 开始录音, 返回操作后的实际录音状态
+await sdk.recordControl(false);                // 停止录音
 ```
 
-`recordControl` 返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+`recordControl` 返回设备应答（协议 v1.29 为操作后的实际录音状态：`1` 录音中、`0` 空闲；旧固件 v1.28 为 `0` 成功/`0x10` 失败，SDK 原样透传；个别固件无应答数据时为 `undefined`）。请勿按"非 0 即失败"判读；实际录制状态以 `getRecordStatus` 或 `recordStatus` 推送为准。
 
 ##### 3.2.5.2 查询录音状态
 
@@ -1193,6 +1251,7 @@ const status = await sdk.getRecordStatus();     // 实际录制状态以查询/�
 | `startTime` | 本次录音开始时间（Unix 毫秒，仅录制中有值，否则 `0`） |
 | `duration` | 本次已录时长（秒，仅录制中有值） |
 | `totalCapacity` / `remainingCapacity` | 录音区总容量 / 剩余容量（字节） |
+| `realtime` | 是否为实时录音；旧固件回包未提供该字段时为 `false` |
 
 ##### 3.2.5.3 获取录音文件列表
 
@@ -1246,6 +1305,39 @@ const status = await sdk.formatRecordStorage();  // 清空全部录音文件, �
 ```
 
 返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+
+##### 3.2.5.7 实时录音
+
+功能位：`supportRecording`，需设备固件支持实时录音。原 `recordControl` 保持不变。
+
+方法说明：
+
+`recordRealtimeControl(start: boolean): Promise<number | undefined>`
+
+| 参数/返回 | 说明 |
+| ---- | ---- |
+| start | `true`：启动实时录音；`false`：停止 |
+| Promise 返回 | 操作后的实际录音状态：`1` 录音中、`0` 空闲（SDK 原样透传，请勿按"非 0 即失败"判读；个别固件无应答数据时为 `undefined`）；音频不通过返回值返回 |
+
+音频通过 `onDeviceEvent` 的 `recordRealtimeData` 事件接收：
+
+| `recordRealtimeData` 字段 | 说明 |
+| ---- | ---- |
+| sequence | 数据包序号 0～255，255 后回到 0，可用于检查丢包和顺序 |
+| audioData | 当前包的音频数据（原始 Opus 压缩数据） |
+
+```js
+const offEvent = sdk.onDeviceEvent((event) => {
+  if (event.type !== "recordRealtimeData") return;
+  // 按到达顺序处理 event.audioData；sequence 为 0-255 循环序号，可用于检查丢包/顺序。
+  console.log("audio", event.sequence, event.audioData.length);
+});
+const result = await sdk.recordRealtimeControl(true);   // 先注册监听再启动
+// 停止时调用：await sdk.recordRealtimeControl(false);
+// 页面退出或不再使用时：offEvent();
+```
+
+先注册监听再启动。操作后的实际录制状态经 `getRecordStatus()` 或 `recordStatus` 事件获取（`realtime` 表示当前是否为实时方式）。实时音频为高频数据，请勿在事件回调中执行耗时操作。
 
 #### 5.2.5 传感器原始数据
 
@@ -1342,7 +1434,35 @@ const off = sdk.onDeviceEvent((event) => {
 | `timestamp` | Unix 毫秒时间戳 |
 | `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
+##### 5.2.5.4 PPG 采样率设置与获取
+
+设置或查询 PPG 采样率，单位 Hz，具体可用值需设备固件支持。功能位：`supportPpgSampleRate`。
+
+方法说明：
+
+`setPpgSampleRate(sampleRate: number): Promise<void>`
+
+`getPpgSampleRate(): Promise<number>`
+
+| 参数 | 说明 |
+| --- | --- |
+| sampleRate | PPG 采样率，单位 Hz |
+
+```js
+await sdk.setPpgSampleRate(100);
+const sampleRate = await sdk.getPpgSampleRate();
+console.log("PPG 采样率:", sampleRate, "Hz");
+```
+
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20261028** (2026.10.28)
+
+- 新增PPG采样率设置与获取接口 `setPpgSampleRate`/`getPpgSampleRate`(5.2.5.4)，功能表新增 `supportPpgSampleRate`
+- 新增客户型号设置与获取接口 `setCustomerModel`/`getCustomerModel`(3.2.1.34)，功能表新增 `supportCustomerModel`，设备信息新增 `customerModel`
+- 新增实时录音控制接口 `recordRealtimeControl` 及实时音频监听(3.2.5.7)
+- 新增计数识别开关、状态查询及主动推送(3.2.1.33)，功能表新增 `supportCountControl`
+- 扫描结果与设备版本信息新增产品形态 `deviceForm`(3.1.1、3.2.1.3)
 
 **RW_SDK_V2.0.0_20261012** (2026.10.12)
 

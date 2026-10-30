@@ -307,6 +307,12 @@ class BleManager {
           if (stage === "initializing") {
             this.patch({ connectionState: "initializing" });
             this.log("连接成功，正在初始化设备");
+            const now = new Date();
+            const offsetMinutes = now.getTimezoneOffset();
+            const timeZone = Math.round(-offsetMinutes / 15);
+            const timeZoneHex = (timeZone & 0xff).toString(16).padStart(2, "0");
+            this.log(`时区诊断：getTimezoneOffset()=${offsetMinutes}分钟，UTC偏移=${-offsetMinutes}分钟，待发送时区=${timeZone} (0x${timeZoneHex})`);
+            this.log(`时间诊断：本地时间=${now.toString()}，UTC时间=${now.toISOString()}`);
           }
         },
         debug: (event, detail) => {
@@ -627,6 +633,21 @@ class BleManager {
       else if (event.keyType === 4) this.log(`连续点击 keyType=4 count=${event.touchType}`);
       else if (event.keyType === 1 && event.touchType === 6) this.log("Release 事件 keyType=1 touchType=6");
       else this.log(`触摸事件 keyType=${event.keyType} touchType=${event.touchType}`);
+      const touchNames = {
+        1: "单击",
+        2: "双击",
+        3: "三击",
+        4: "长按",
+        5: "甩动",
+        6: "松手（Release）",
+      };
+      let title;
+      if (event.keyType === 1) title = touchNames[event.touchType] || `未知触摸操作：${event.touchType}`;
+      else if (event.keyType === 2) title = "跌落提醒";
+      else if (event.keyType === 3) title = "SOS 事件";
+      else if (event.keyType === 4) title = `连续点击 ${event.touchType} 次`;
+      else title = `未知事件：${event.keyType}`;
+      if (wx.showToast) wx.showToast({ title, icon: "none", duration: 1500 });
       return;
     }
     if (event.type === "power") {
