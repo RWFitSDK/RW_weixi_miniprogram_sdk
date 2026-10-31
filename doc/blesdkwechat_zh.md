@@ -1224,18 +1224,20 @@ const reports = await sdk.getWorkoutReports();
 
 `WorkoutReport` 包含 `startTime`、`endTime`（Unix 毫秒）、`exerciseTime`、`workModel`、`step`、`distance`、`calorie`、`speed`、`pace`、平均/最大/最小心率、步频、配速、`heartRates` 和 `pacePerKmList`。
 
-#### 3.2.5 录音功能
+#### 3.2.5 AI录音功能
 
 功能位：`supportRecording`。仅支持该能力的设备可使用。录音数据为原始 Opus 编码字节，SDK 只负责传输，不保存本地、不做格式转换，由业务端自行处理。
 
 ##### 3.2.5.1 开始/停止录音
+
+`recordControl(start: boolean): Promise<number>`
 
 ```js
 const state = await sdk.recordControl(true);   // 开始录音, 返回操作后的实际录音状态
 await sdk.recordControl(false);                // 停止录音
 ```
 
-`recordControl` 返回设备应答（协议 v1.29 为操作后的实际录音状态：`1` 录音中、`0` 空闲；旧固件 v1.28 为 `0` 成功/`0x10` 失败，SDK 原样透传；个别固件无应答数据时为 `undefined`）。请勿按"非 0 即失败"判读；实际录制状态以 `getRecordStatus` 或 `recordStatus` 推送为准。
+返回操作后的实际录音状态：`1` 录音中、`0` 空闲。可通过 `getRecordStatus()` 查询详细状态，或监听 `recordStatus` 事件接收状态变化。
 
 ##### 3.2.5.2 查询录音状态
 
@@ -1251,7 +1253,7 @@ const status = await sdk.getRecordStatus();     // 实际录制状态以查询/�
 | `startTime` | 本次录音开始时间（Unix 毫秒，仅录制中有值，否则 `0`） |
 | `duration` | 本次已录时长（秒，仅录制中有值） |
 | `totalCapacity` / `remainingCapacity` | 录音区总容量 / 剩余容量（字节） |
-| `realtime` | 是否为实时录音；旧固件回包未提供该字段时为 `false` |
+| `realtime` | 是否为实时录音 |
 
 ##### 3.2.5.3 获取录音文件列表
 
@@ -1296,7 +1298,7 @@ const result = await sdk.transferRecordFile(fileId, {
 const status = await sdk.deleteRecordFile(fileId);  // 删除指定文件
 ```
 
-返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+返回操作结果：`0` 成功，非 `0` 失败。
 
 ##### 3.2.5.6 格式化录音区
 
@@ -1304,20 +1306,20 @@ const status = await sdk.deleteRecordFile(fileId);  // 删除指定文件
 const status = await sdk.formatRecordStorage();  // 清空全部录音文件, 不可恢复
 ```
 
-返回设备应答状态（`0` 成功，非 `0` 失败；个别固件无应答数据时为 `undefined`）。
+返回操作结果：`0` 成功，非 `0` 失败。
 
 ##### 3.2.5.7 实时录音
 
-功能位：`supportRecording`，需设备固件支持实时录音。原 `recordControl` 保持不变。
+功能位：`supportRecording`，需设备固件支持实时录音。普通录音使用 `recordControl`。
 
 方法说明：
 
-`recordRealtimeControl(start: boolean): Promise<number | undefined>`
+`recordRealtimeControl(start: boolean): Promise<number>`
 
 | 参数/返回 | 说明 |
 | ---- | ---- |
 | start | `true`：启动实时录音；`false`：停止 |
-| Promise 返回 | 操作后的实际录音状态：`1` 录音中、`0` 空闲（SDK 原样透传，请勿按"非 0 即失败"判读；个别固件无应答数据时为 `undefined`）；音频不通过返回值返回 |
+| Promise 返回 | 操作后的实际录音状态：`1` 录音中、`0` 空闲 |
 
 音频通过 `onDeviceEvent` 的 `recordRealtimeData` 事件接收：
 
