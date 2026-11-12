@@ -1,5 +1,6 @@
 const bleManager = require("../../services/bleManager");
 const { getSettings } = require("../../utils/capabilities");
+const { formatCompositeValues } = require("../../utils/compositeMeasurement");
 const { SensorRawControl } = require("../../sdk/rw-ble-sdk.min.js");
 
 function choose(itemList) {
@@ -269,6 +270,8 @@ Page({
     if (id === "sensorRawPPG") return this.manageSensorRawPpg(sdk);
     if (id === "screenControl") return this.manageScreenControl(sdk);
     if (id === "customNumberDisplay") return this.showCustomNumber(sdk);
+    if (id === "customTextDisplay") return this.showCustomText(sdk);
+    if (id === "compositeMeasurement") return this.manageCompositeMeasurement(sdk);
     if (id === "countControl") return this.manageCountControl(sdk);
     if (id === "ppgSampleRate") return this.managePpgSampleRate(sdk);
     if (id === "customerModel") return this.manageCustomerModel(sdk);
@@ -445,6 +448,22 @@ Page({
     wx.showToast({ title: "发送成功", icon: "success" });
   },
 
+  async showCustomText(sdk) {
+    const input = await editable("自定义字符显示", "最多5个英文字母或数字，例如 A627");
+    if (!input) return;
+    const text = input.slice(0, 5);
+    if (!/^[A-Za-z0-9]{1,5}$/.test(text)) throw new Error("请输入英文字母或数字");
+    const durationInput = await editable("显示时长", "单位秒，1～255，例如 5");
+    if (!durationInput) return;
+    const value = Number(durationInput);
+    if (!Number.isFinite(value)) throw new Error("请输入有效的显示时长");
+    const durationSeconds = Math.max(1, Math.min(255, Math.trunc(value)));
+    await sdk.showCustomText(text, durationSeconds);
+    this.updateSettingValue("customTextDisplay", `上次发送：${text} · ${durationSeconds}秒`);
+    bleManager.log(`自定义字符显示成功：${text}，显示时长：${durationSeconds}秒`);
+    wx.showToast({ title: "发送成功", icon: "success" });
+  },
+
   async managePpgSampleRate(sdk) {
     const action = await choose(["查询采样率", "设置采样率"]);
     if (action === null) return;
@@ -460,6 +479,45 @@ Page({
     this.updateSettingValue("ppgSampleRate", `${value} Hz`);
     bleManager.log(`当前 PPG 采样率：${value} Hz`);
     wx.showToast({ title: `${value} Hz`, icon: "none" });
+  },
+
+  async manageCompositeMeasurement(sdk) {
+    const action = await choose(["开始综合检测", "停止综合检测"]);
+    if (action === null) return;
+    if (action === 1) {
+      await sdk.controlCompositeMeasurement(0, { onFinished: () => {} });
+      bleManager.log("已发送综合检测停止指令");
+      wx.showToast({ title: "停止指令已发送", icon: "none" });
+      return;
+    }
+    let values = "";
+    const updateStatus = (status) => this.updateSettingValue("compositeMeasurement",
+      values ? `${status}\n${values}` : status);
+    updateStatus("正在启动…");
+    sdk.controlCompositeMeasurement(1, {
+      onStarted: () => {
+        if (sdk !== bleManager.getSdk()) return;
+        updateStatus("检测中");
+        bleManager.log("综合检测已开始");
+      },
+      onData: (items) => {
+        if (sdk !== bleManager.getSdk()) return;
+        values = formatCompositeValues(items);
+        updateStatus("检测中");
+        bleManager.log(`综合检测数据包(${items.length}项)：${values}`);
+      },
+      onFinished: (result) => {
+        if (sdk !== bleManager.getSdk()) return;
+        if (result.endResult === 2) {
+          updateStatus("未佩戴");
+          wx.showToast({ title: "未佩戴，请佩戴后重试", icon: "none" });
+        } else {
+          updateStatus(result.success ? "已完成" : "失败/超时");
+          wx.showToast({ title: result.success ? "综合检测完成" : "综合检测失败", icon: "none" });
+        }
+        bleManager.log(`综合检测结束 success=${result.success}, reason=${result.reason}, endResult=${result.endResult}`);
+      },
+    });
   },
 
   async manageCustomerModel(sdk) {

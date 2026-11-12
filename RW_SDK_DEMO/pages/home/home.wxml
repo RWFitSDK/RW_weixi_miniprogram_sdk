@@ -3,6 +3,7 @@
     <view>
       <view class="hero-title">今天感觉怎么样？</view>
       <view class="hero-subtitle">连接戒指，查看你的健康趋势</view>
+      <view class="hero-version">{{demoVersion}}</view>
     </view>
     <view class="hero-mark">RW</view>
   </view>

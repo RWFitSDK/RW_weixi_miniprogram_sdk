@@ -1,3 +1,12 @@
+/** SDK只提供日志出口，不保存文件、不上传，也不改变原有debug输出。 */
+export interface SdkLog {
+	/** Unix毫秒时间戳。 */
+	timestamp: number;
+	type: "send" | "receive" | "connection" | "error";
+	/** 收发为不含6字节帧头的十六进制载荷，其它事件为简短描述。 */
+	message: string;
+}
+export type SdkLogCallback = (log: SdkLog) => void;
 export interface PowerInfo {
 	level: number;
 	voltage?: number;
@@ -72,6 +81,9 @@ export interface SupportMenu {
 	supportDevicePasswordAuth: boolean;
 	supportScreenControl: boolean;
 	supportCustomNumberDisplay: boolean;
+	supportCustomTextDisplay: boolean;
+	/** 是否支持综合检测(协议2.3.1, SUPPORT_HEALTH_MONITORING bit2)。 */
+	supportCompositeMeasurement: boolean;
 	activityDataInterval: number;
 	healthDataSwitchEnabled: boolean;
 	step: boolean;
@@ -146,7 +158,7 @@ export interface ReminderInfo {
 	intervalMinutes: number;
 	weekdays: number[];
 }
-/** 录音状态(对齐 Android RecordStatusBean; 协议 ≥20 字节, 容量单位字节)。 */
+/** 录音状态，容量单位字节。 */
 export interface RecordStatus {
 	recording: boolean;
 	/** 本次录音开始时间(仅录制中有值, 毫秒); 0=未知。 */
@@ -155,7 +167,7 @@ export interface RecordStatus {
 	duration: number;
 	totalCapacity: number;
 	remainingCapacity: number;
-	/** 是否为实时录音(协议 v1.29 第 21 字节); 旧固件 20 字节回包为 false。 */
+	/** 是否为实时录音。 */
 	realtime: boolean;
 }
 /** 录音文件列表项(fileId/fileSize/duration 各 4 字节大端, 时间为 2000 纪元大端)。 */
@@ -295,6 +307,13 @@ export type DeviceEvent = ({
 	status: number;
 	completed: boolean;
 	measurementType?: number;
+	endResult?: number;
+}
+/** 综合检测组合包(协议2.3.1, 0x21推送): 共享时间戳 + 全部检测项目, 一包一条事件。 */
+ | {
+	type: "compositeHealth";
+	timestamp: number;
+	items: CompositeHealthItem[];
 } | {
 	type: "healthAlert";
 	alertType: number;
@@ -317,12 +336,30 @@ export type DeviceEvent = ({
 	result: number;
 	completed: boolean;
 };
+/**
+ * 逐项解析设备事件: 一帧 0x0253 可携带多项计数, 每项各产生一条 muslimCount 事件(与 Android 对齐);
+ * 其余 key 每帧最多一条。onDeviceEvent 按本函数分发。
+ */
+/** 综合检测单项结果(协议2.3.1): key对应实时Key, value/extraValue 按各类型换算。 */
+export interface CompositeHealthItem {
+	healthType: HealthDataType;
+	timestamp: number;
+	value: number;
+	extraValue: number;
+}
 export interface MeasurementSessionResult {
 	/** 检测类型(HealthMeasurementType 低字节)。 */
 	healthType: number;
 	success: boolean;
 	/** device=设备结束帧; timeout=70s超时; error=开始指令失败。 */
 	reason: "device" | "timeout" | "error";
+	/** 设备结束帧携带的检测结果码(协议2.3.1): 0x00正常, 0x02未佩戴; 旧固件无该字节为 undefined。 */
+	endResult?: number;
+}
+export interface CompositeMeasurementHandlers {
+	onStarted?: () => void;
+	onData?: (items: CompositeHealthItem[]) => void;
+	onFinished: (result: MeasurementSessionResult) => void;
 }
 export interface MeasurementSessionHandlers {
 	onStarted?: () => void;
@@ -460,6 +497,14 @@ export declare class RingSdkConnectionError extends Error {
 export declare class RingSdk {
 	/** 新增会话接口；原 setHealthMeasurement/onDeviceEvent 保持不变。 */
 	controlOpen(type: 0 | 1, healthType: number, handlers: MeasurementSessionHandlers): void;
+	/**
+	 * 综合检测(协议2.3.1, DataType 0x051F)。需功能表 supportCompositeMeasurement。
+	 * 每个完整组合包通过一次 onData 返回全部项目(CompositeHealthItem[]);单项检测仍走 controlOpen。
+	 * onFinished.result.endResult: 2=未佩戴(success=false), 0=正常; 旧固件无该字节为 undefined。
+	 */
+	controlCompositeMeasurement(type: 0 | 1, handlers: CompositeMeasurementHandlers): void;
+	/** 注销综合检测监听，不发送停止指令。 */
+	takeCompositeMeasurement(): void;
 	/** 注销测量监听，不发送停止指令。 */
 	takeHealthMeasurement(): void;
 	supportMenu: SupportMenu | null;
@@ -536,6 +581,12 @@ export declare class RingSdk {
 	 * 显示3秒，再次调用更新数字并重新计时。Promise在设备应答后完成。
 	 */
 	showCustomNumber(number: number): Promise<void>;
+	/**
+	 * 显示字符并设置时长，需功能表 supportCustomTextDisplay。
+	 * 最多5个英文字母或数字，超出截取前5个；时长单位秒，自动限制为1..255。
+	 * 再次调用更新内容并重新计时。Promise在设备应答后完成，不等待显示结束。
+	 */
+	showCustomText(text: string, durationSeconds: number): Promise<void>;
 	/** 设置 PPG 采样率，单位 Hz。需功能表 supportPpgSampleRate。 */
 	setPpgSampleRate(sampleRate: number): Promise<void>;
 	/** 获取设备当前 PPG 采样率，单位 Hz。 */
@@ -550,17 +601,16 @@ export declare class RingSdk {
 	 */
 	deviceChallenge(challengeHex: string): Promise<string>;
 	/**
-	 * 开始/停止录音。返回设备应答(协议 v1.29 为操作后的实际录音状态: 1=录音中, 0=空闲; 旧固件 v1.28 为 0=成功/0x10=失败, SDK 原样透传)。
-	 * 实际录制状态以 getRecordStatus 或 recordStatus 推送为准。需功能表 supportRecording。
+	 * 开始/停止普通录音。返回操作后的实际录音状态: 1=录音中, 0=空闲。
+	 * 详细状态通过 getRecordStatus 查询或 recordStatus 事件接收。需功能表 supportRecording。
 	 */
-	recordControl(start: boolean): Promise<number | undefined>;
+	recordControl(start: boolean): Promise<number>;
 	/**
-	 * 开始/停止实时录音(协议 v1.29 3.1): 启停+实时标志双字节, 原 recordControl 保持不变。
-	 * 返回设备应答(操作后的实际录音状态: 1=录音中, 0=空闲; SDK 原样透传), 实际状态以
-	 * getRecordStatus 或 recordStatus 推送为准; 音频不经返回值, 通过 onDeviceEvent 的
+	 * 开始/停止实时录音。返回操作后的实际录音状态: 1=录音中, 0=空闲。
+	 * 详细状态通过 getRecordStatus 查询或 recordStatus 事件接收; 音频通过 onDeviceEvent 的
 	 * recordRealtimeData 事件接收(sequence 0-255 循环序号 + audioData 原始字节)。需功能表 supportRecording。
 	 */
-	recordRealtimeControl(start: boolean): Promise<number | undefined>;
+	recordRealtimeControl(start: boolean): Promise<number>;
 	/** 计数识别开关(协议2.3.5): true=开启(Arm) false=关闭(Disarm), 切换不清零累计计数; 返回设备执行结果(0=成功, 0x10=失败)。需功能表 supportCountControl; 状态变化经 countControl 事件推送。 */
 	setCountControl(armed: boolean): Promise<number | undefined>;
 	/** 查询计数识别状态(协议2.3.5): true=Arm false=Disarm; 与设置操作请等待上一次调用完成后再发起。 */
@@ -616,6 +666,8 @@ export declare class RingSdk {
 	 */
 	syncAllHealthData(options?: SyncAllHealthOptions): Promise<SyncAllHealthResult>;
 	readonly deviceId: string;
+	/** 连接前设置即可接收日志；默认关闭，传null关闭。SDK不保存或上传日志。 */
+	static setLogCallback(callback: SdkLogCallback | null): void;
 	/** 设置后续连接自动认证使用的密码；空值按默认密码0000处理。 */
 	static prepareAutoPassword(password?: string | null): void;
 	/** 授权下一次连接重置设备密码；调用方应先在业务层完成重置资格校验。 */

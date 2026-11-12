@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20261028`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20261112`。
 
 #### 1.1 适用平台与语言
 
@@ -204,8 +204,39 @@ const latestMenu = await sdk.readFunctionList();
 | `supportRecording` | 录音 |
 | `supportCustomerModel` | 客户型号设置与获取（3.2.1.34） |
 | `supportPpgSampleRate` | PPG 采样率设置与获取（5.2.5.4） |
+| `supportCustomTextDisplay` | 自定义字符显示与时长设置（3.2.1.32） |
 
 调用相关接口前应先判断相应功能位。
+
+##### 3.1.7 日志回调
+
+日志默认关闭，建议在连接设备前开启。接入方可通过回调获取日志，自行保存或上传。
+
+```js
+const pendingLogs = [];
+
+// 开启日志
+RingSdk.setLogCallback((log) => {
+  pendingLogs.push(log);
+});
+```
+
+不再需要时关闭日志：
+
+```js
+RingSdk.setLogCallback(null);
+```
+
+回调日志格式：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `timestamp` | `number` | 日志时间，Unix 毫秒时间戳 |
+| `type` | `string` | `send` 发送、`receive` 接收、`connection` 连接与断开、`error` 错误 |
+| `message` | `string` | 日志内容；蓝牙收发内容为十六进制字符串，如 `02 03 10`，`connection` 日志在开始连接时携带 `deviceId`，其它日志为事件描述 |
+
+> [!TIP]
+> 建议先缓存日志，在一次功能操作完成后，或累计一定条数（如 20 条或 100 条）时，再批量保存或上传，避免每条日志单独上传。保存或上传方式由接入方自行实现。
 
 ### 3.2 设备功能操作
 
@@ -694,6 +725,30 @@ try {
 }
 ```
 
+**显示字符与设置时长**
+
+将英文字母、数字或混合内容显示到设备，持续指定秒数后退出。再次调用时更新内容并重新计时。功能位：`supportCustomTextDisplay`，仅支持该能力的设备可使用。
+
+`showCustomText(text: string, durationSeconds: number): Promise<void>`
+
+| 参数 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| text | string | 显示内容，最多5个英文字母或数字，超出截取前5个 |
+| durationSeconds | number | 显示时长，单位秒，范围1～255，超出范围自动限制 |
+
+Promise 在设备接受操作后完成，不必等待显示结束；失败时进入 `catch`。
+
+```js
+if (menu.supportCustomTextDisplay) {
+  try {
+    await sdk.showCustomText("A627", 5);
+    console.log("字符显示设置成功");
+  } catch (error) {
+    console.error("字符显示设置失败", error);
+  }
+}
+```
+
 ##### 3.2.1.33 计数识别开关与状态查询
 
 开启或关闭计数识别，切换不清零累计计数。功能位：`supportCountControl`。仅支持该能力的设备可使用。
@@ -748,7 +803,7 @@ console.log("客户型号:", model);
 
 实时单次检测由小程序启动后立即返回过程数据；全天检测由设备按计划测量并保存历史数据。睡眠没有实时单次检测。
 
-##### 3.2.2.1 实时检测——启动与关闭设备健康数据检测
+##### 3.2.2.0 实时检测——单项检测
 
 使用 `controlOpen()` 管理单次检测：`1` 开始、`0` 停止。实时数据通过 `onData` 返回，检测结束通过 `onFinished` 返回，SDK 不负责持久化。同一时间只开启一种检测。
 
@@ -764,7 +819,7 @@ sdk.controlOpen(1, HealthMeasurementType.HEART_RATE, {
 sdk.controlOpen(0, HealthMeasurementType.HEART_RATE, { onFinished: () => {} });
 ```
 
-完成、失败或断连后自动注销；检测长时间未结束时 SDK 会自动停止并返回 `reason: "timeout"`。页面退出可调用 `takeHealthMeasurement()` 仅注销监听（不停止设备测量）。重复开始会替换旧监听，同一时间只保留一个会话。
+完成、失败或断连后自动注销；检测长时间未结束时 SDK 会自动停止并返回 `reason: "timeout"`。页面退出可调用 `takeHealthMeasurement()` 仅注销监听（不停止设备测量）。重复开始会替换旧监听，同一时间只保留一个会话。`onFinished(result)` 中 `result.endResult` 为设备结束帧携带的结果码：`0` 正常，`2` 未佩戴（此时 `success` 为 `false`），旧固件无该字节时为 `undefined`。
 
 支持的 `HealthMeasurementType`：
 
@@ -777,6 +832,27 @@ sdk.controlOpen(0, HealthMeasurementType.HEART_RATE, { onFinished: () => {} });
 | `HRV` | 心率变异性 | `0x0A` |
 | `STRESS` | 压力 | `0x0D` |
 | `BLOOD_SUGAR` | 血糖 | `0x10` |
+
+##### 3.2.2.1 实时检测——综合检测
+
+> 功能位：`supportCompositeMeasurement`。一轮检测可返回心率、HRV、压力、血压、体温、血糖（不含血氧），以设备实际返回的项目为准。综合检测与单项检测不能同时进行。
+
+经 `controlCompositeMeasurement(1, handlers)` 启动，`onData` 返回的数组为本次上报的全部检测项目，每项含 `healthType`/`timestamp`/`value`/`extraValue`（血压 `value`=收缩压、`extraValue`=舒张压；同一次上报的各项共用相同 `timestamp`）：
+
+```js
+sdk.controlCompositeMeasurement(1, {
+  onStarted: () => console.log("综合检测已开始"),
+  onData: (items) => items.forEach((item) => console.log(item.healthType, item.value)),
+  onFinished: (result) => {
+    if (result.endResult === 2) console.log("未佩戴，请佩戴后重试");
+    else console.log("综合检测结束", result.success);
+  },
+});
+// 主动停止：结果仍通过开始时的 onFinished 返回。
+sdk.controlCompositeMeasurement(0, { onFinished: () => {} });
+```
+
+收到数据不代表整轮结束，以 `onFinished` 为准；未佩戴时 `success=false`、`endResult=2`。
 
 ##### 3.2.2.2 全天检测——设置健康数据全天监听间隔
 
@@ -958,10 +1034,11 @@ console.log(result.errors);  // 单项失败不阻断其他类型
 
 ###### 3.2.2.4.4 睡眠数据
 
-每个从模式 17（睡眠开始）到 34（睡眠结束）的完整段生成一条记录：
+每段完整的夜睡或小睡分别返回一条记录，可包含多天数据。小睡需设备固件支持。
 
 | `detail` 字段 | 说明 |
 | --- | --- |
+| `sleepCategory` | 睡眠类别：`0` 夜睡，`1` 小睡（如午睡） |
 | `asleepAt` / `awakeAt` | 入睡/醒来 Unix 毫秒 |
 | `totalMinutes` | 总时长 |
 | `deepMinutes` | 深睡 |
@@ -1434,7 +1511,7 @@ const off = sdk.onDeviceEvent((event) => {
 | 字段 | 说明 |
 | --- | --- |
 | `timestamp` | Unix 毫秒时间戳 |
-| `sleepMode` | `17` 睡眠开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
+| `sleepMode` | `17` 夜睡开始<br>`18` 小睡开始<br>`34` 睡眠结束<br>`1` 深睡<br>`2` 浅睡<br>`3` 清醒<br>`4` REM |
 
 ##### 5.2.5.4 PPG 采样率设置与获取
 
@@ -1457,6 +1534,17 @@ console.log("PPG 采样率:", sampleRate, "Hz");
 ```
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20261112** (2026.11.12)
+
+- 新增日志回调 `RingSdk.setLogCallback`（3.1.7），可获取蓝牙收发十六进制、连接过程及错误日志，由接入方自行保存或上传；默认关闭
+
+**RW_SDK_V2.0.0_20261105** (2026.11.05)
+
+- 新增实时综合检测接口 `controlCompositeMeasurement` 一次获取心率、HRV、压力、血压、体温、血糖多项数据(3.2.2.1)，功能表新增 `supportCompositeMeasurement`；结束通知携带检测结果码，未佩戴时 `endResult=2`
+- 新增字符显示与时长设置接口 `showCustomText`（3.2.1.32），功能表新增 `supportCustomTextDisplay`
+- 修复设备信息中客户型号 `customerModel` 读取偏移
+- 新增小睡数据支持，睡眠记录新增 `detail.sleepCategory` 区分夜睡与小睡（3.2.2.4.4）
 
 **RW_SDK_V2.0.0_20261028** (2026.10.28)
 

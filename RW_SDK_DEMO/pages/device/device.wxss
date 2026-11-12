@@ -100,6 +100,16 @@
   color: #0c9568;
 }
 
+.composite-value {
+  display: block;
+  margin-top: 10rpx;
+  color: #0c9568;
+  font-size: 25rpx;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
 .device-empty {
   margin-top: 34rpx;
 }

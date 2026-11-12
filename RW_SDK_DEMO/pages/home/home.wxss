@@ -35,6 +35,13 @@
   font-weight: 750;
 }
 
+.hero-version {
+  margin-top: 8rpx;
+  color: #87928d;
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
 .unbound-card {
   display: flex;
   align-items: center;

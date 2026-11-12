@@ -4,6 +4,7 @@ const { formatTime } = require("../../utils/format");
 
 Page({
   data: {
+    demoVersion: "V1.0.8_261103",
     boundDevice: null,
     connectionState: "disconnected",
     healthCards: [],

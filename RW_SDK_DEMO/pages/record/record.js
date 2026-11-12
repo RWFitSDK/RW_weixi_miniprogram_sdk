@@ -180,12 +180,8 @@ Page({
     this.syncState({ toggling: true });
     const start = !this.data.status.recording;
     try {
-      // 应答为操作后的实际录音状态(1=录音中, 0=空闲; 旧固件为 0=成功/0x10=失败):
-      // 0/1 之外的值是明确失败码直接报错; 0/1 不当作成功凭证, 提示以查询到的实际状态为准。
-      const reply = await requireSdk().recordControl(start);
-      if (reply !== undefined && reply !== 0 && reply !== 1) {
-        throw new Error(`设备返回失败码 0x${reply.toString(16)}`);
-      }
+      // 返回操作后的实际录音状态(1=录音中, 0=空闲)，查询后更新页面。
+      await requireSdk().recordControl(start);
       // 查询失败已提示"获取状态失败", 不再用旧状态判断, 避免覆盖错误提示
       if (!(await this.refreshStatus())) return;
       this.notify(!!this.data.status.recording === start
@@ -199,7 +195,7 @@ Page({
     }
   },
 
-  /** 实时录音(协议 v1.29): 音频经 recordRealtimeData 事件推送, 此处只演示接收统计。 */
+  /** 实时录音：音频经 recordRealtimeData 事件推送，此处只演示接收统计。 */
   async toggleRealtimeRecord() {
     if (this.data.togglingRealtime) return;
     // 普通录音进行中不直接切换模式; 先停止, 再启动实时录音
@@ -214,12 +210,8 @@ Page({
         this.realtimeCounters = { packets: 0, bytes: 0, sequence: null };
         this.syncState({ realtimeStats: { packets: 0, bytes: 0, sequence: "--" } });
       }
-      // 应答为操作后的实际录音状态(启动成功返回 1 录音中, 启动未生效返回 0 空闲):
-      // 0/1 之外的值是明确失败码直接报错; 启动/停止是否生效以查询到的实际状态为准。
-      const reply = await requireSdk().recordRealtimeControl(start);
-      if (reply !== undefined && reply !== 0 && reply !== 1) {
-        throw new Error(`设备返回失败码 0x${reply.toString(16)}`);
-      }
+      // 查询详细状态，确认启动/停止是否生效并更新页面。
+      await requireSdk().recordRealtimeControl(start);
       // 查询失败已提示"获取状态失败", 不再用旧状态判断, 避免覆盖错误提示
       if (!(await this.refreshStatus())) return;
       const started = start ? this.data.realtimeMode : !this.data.status.recording;

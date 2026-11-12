@@ -62,9 +62,10 @@
         <view class="setting-symbol">{{item.symbol}}</view>
         <view class="cell-main">
           <view class="cell-title">{{item.title}}</view>
-          <view class="cell-subtitle">{{item.subtitle}}</view>
+          <view wx:if="{{item.id !== 'compositeMeasurement'}}" class="cell-subtitle">{{item.subtitle}}</view>
+          <text wx:else class="composite-value">{{item.valueText || '点击开始检测'}}</text>
         </view>
-        <text wx:if="{{item.valueText}}" class="cell-value support-value">{{item.valueText}}</text>
+        <text wx:if="{{item.valueText && item.id !== 'compositeMeasurement'}}" class="cell-value support-value">{{item.valueText}}</text>
         <text class="chevron">›</text>
       </view>
     </view>
