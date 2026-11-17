@@ -1,6 +1,7 @@
 const bleManager = require("../../services/bleManager");
 const { getSettings } = require("../../utils/capabilities");
 const { formatCompositeValues } = require("../../utils/compositeMeasurement");
+const { DEVICE_BODY_COLORS, formatDeviceBodyColor, formatDeviceSize } = require("../../utils/deviceAppearance");
 const { SensorRawControl } = require("../../sdk/rw-ble-sdk.min.js");
 
 function choose(itemList) {
@@ -92,6 +93,7 @@ Page({
   },
 
   onLoad() {
+    this.pageUnloaded = false;
     this.settingValues = {};
     this.unsubscribe = bleManager.subscribe((state) => {
       this.applyState(state);
@@ -104,6 +106,8 @@ Page({
   },
 
   onUnload() {
+    this.pageUnloaded = true;
+    if (this.connectionTask) bleManager.cancelConnection(this.connectionTask);
     if (this.unsubscribe) this.unsubscribe();
     if (this.deviceEventUnsubscribe) this.deviceEventUnsubscribe();
     this.deviceEventUnsubscribe = null;
@@ -135,6 +139,11 @@ Page({
 
   applyState(state) {
     const device = state.boundDevice;
+    const deviceId = device && device.deviceId;
+    if (this.settingDeviceId !== deviceId) {
+      ["vibrationSwitch", "deviceBodyColor", "deviceSize"].forEach((id) => { delete this.settingValues[id]; });
+      this.settingDeviceId = deviceId;
+    }
     const firmware = device && device.firmware;
     this.setData({
       boundDevice: device,
@@ -167,13 +176,17 @@ Page({
     this.setData({ busy: true });
     wx.showLoading({ title: "连接中", mask: true });
     try {
-      await bleManager.reconnect();
+      this.connectionTask = bleManager.reconnect();
+      await this.connectionTask;
+      if (this.pageUnloaded) return;
       wx.showToast({ title: "连接成功", icon: "success" });
     } catch (error) {
+      if (this.pageUnloaded || error.reason === "CANCELLED") return;
       bleManager.presentError(error, "重新连接失败");
     } finally {
+      this.connectionTask = null;
       wx.hideLoading();
-      this.setData({ busy: false });
+      if (!this.pageUnloaded) this.setData({ busy: false });
     }
   },
 
@@ -275,6 +288,9 @@ Page({
     if (id === "countControl") return this.manageCountControl(sdk);
     if (id === "ppgSampleRate") return this.managePpgSampleRate(sdk);
     if (id === "customerModel") return this.manageCustomerModel(sdk);
+    if (id === "vibrationSwitch") return this.manageVibrationSwitch(sdk);
+    if (id === "deviceBodyColor") return this.manageDeviceBodyColor(sdk);
+    if (id === "deviceSize") return this.manageDeviceSize(sdk);
     if (id === "powerOff") return this.runPowerAction(sdk);
     if (id === "deviceChallenge") return this.runDeviceChallenge(sdk);
     if (id === "vibrationControl") return this.runVibrationControl(sdk);
@@ -533,6 +549,58 @@ Page({
     this.updateSettingValue("customerModel", model || "未设置");
     bleManager.log(`当前客户型号：${model}`);
     wx.showToast({ title: model || "未设置", icon: "none" });
+  },
+
+  isCurrentDeviceSdk(sdk) {
+    return !this.pageUnloaded && sdk === bleManager.getSdk();
+  },
+
+  async manageVibrationSwitch(sdk) {
+    const action = await choose(["查询当前开关", "开启震动", "关闭震动"]);
+    if (action === null || !this.isCurrentDeviceSdk(sdk)) return;
+    if (action > 0) {
+      await sdk.setVibrationSwitch(action === 1);
+      if (!this.isCurrentDeviceSdk(sdk)) return;
+    }
+    const enabled = await sdk.getVibrationSwitch();
+    if (!this.isCurrentDeviceSdk(sdk)) return;
+    const text = enabled ? "已开启" : "已关闭";
+    this.updateSettingValue("vibrationSwitch", text);
+    bleManager.log(`震动总开关：${text}`);
+  },
+
+  async manageDeviceBodyColor(sdk) {
+    const action = await choose(["查询外观颜色", "设置外观颜色"]);
+    if (action === null || !this.isCurrentDeviceSdk(sdk)) return;
+    if (action === 1) {
+      const color = await choose(DEVICE_BODY_COLORS);
+      if (color === null || !this.isCurrentDeviceSdk(sdk)) return;
+      await sdk.setDeviceBodyColor(color);
+      if (!this.isCurrentDeviceSdk(sdk)) return;
+    }
+    const color = await sdk.getDeviceBodyColor();
+    if (!this.isCurrentDeviceSdk(sdk)) return;
+    const text = formatDeviceBodyColor(color);
+    this.updateSettingValue("deviceBodyColor", text);
+    bleManager.log(`设备外观颜色：${text}`);
+  },
+
+  async manageDeviceSize(sdk) {
+    const action = await choose(["查询设备尺寸", "设置设备尺寸"]);
+    if (action === null || !this.isCurrentDeviceSdk(sdk)) return;
+    if (action === 1) {
+      const input = await editable("设备尺寸", "输入尺寸号，如9；0表示未设置");
+      if (!input || !this.isCurrentDeviceSdk(sdk)) return;
+      const value = Number(input);
+      if (!Number.isFinite(value)) throw new Error("请输入有效尺寸号");
+      await sdk.setDeviceSize(Math.max(0, Math.min(255, Math.trunc(value))));
+      if (!this.isCurrentDeviceSdk(sdk)) return;
+    }
+    const size = await sdk.getDeviceSize();
+    if (!this.isCurrentDeviceSdk(sdk)) return;
+    const text = formatDeviceSize(size);
+    this.updateSettingValue("deviceSize", text);
+    bleManager.log(`设备尺寸：${text}`);
   },
 
   async runDeviceChallenge(sdk) {

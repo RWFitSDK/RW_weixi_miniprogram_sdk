@@ -8,11 +8,11 @@ const DEMO_DEVICE_PASSWORD = "4567";
 
 const WX_BLE_MESSAGES = {
   10000: { code: "ADAPTER_NOT_INITIALIZED", message: "蓝牙尚未初始化，请稍后重试" },
-  10001: { code: "BLUETOOTH_OFF", message: "手机蓝牙未开启，请开启蓝牙后重试", action: "bluetoothSetting" },
+  10001: { code: "BLUETOOTH_OFF", message: "蓝牙暂不可用，请检查蓝牙权限后重试", action: "bluetoothSetting" },
   10002: { code: "DEVICE_NOT_FOUND", message: "未找到设备，请确认设备在附近且未连接其他手机" },
   10003: { code: "CONNECT_FAILED", message: "设备连接失败，请靠近设备后重试" },
-  10004: { code: "SERVICE_NOT_FOUND", message: "未发现设备通信服务，请确认设备型号和固件是否兼容" },
-  10005: { code: "CHARACTERISTIC_NOT_FOUND", message: "设备通信特征不完整，请确认设备型号和固件是否兼容" },
+  10004: { code: "SERVICE_NOT_FOUND", message: "设备通信服务获取失败，请靠近设备后重试；若持续失败请开关手机蓝牙" },
+  10005: { code: "CHARACTERISTIC_NOT_FOUND", message: "设备通信通道不完整，请靠近设备后重试；若持续失败请开关手机蓝牙" },
   10006: { code: "DISCONNECTED", message: "设备连接已断开，请重新连接" },
   10007: { code: "PROPERTY_NOT_SUPPORTED", message: "当前设备不支持此蓝牙操作" },
   10008: { code: "SYSTEM_ERROR", message: "系统蓝牙繁忙，请关闭蓝牙后重新开启再试" },
@@ -36,9 +36,16 @@ function createBleError(error, stage) {
   const lowerMessage = String(errMsg).toLowerCase();
   const reason = error && error.reason ? error.reason : "";
   let mapped = errCode === undefined ? null : WX_BLE_MESSAGES[errCode];
+  if (errCode === 10001 && errMsg === "system bluetooth is off") {
+    mapped = { code: "BLUETOOTH_OFF", message: "手机蓝牙已关闭，请在系统设置中开启蓝牙后重试", action: "bluetoothSetting" };
+  }
   if (reason === "PASSWORD_AUTH_FAILED") {
     mapped = { code: "PASSWORD_AUTH_FAILED", message: "设备密码认证失败；Demo 默认演示密码为 4567" };
   }
+  if (reason === "CANCELLED") mapped = { code: "CANCELLED", message: "连接已取消" };
+  if (reason === "BUSY") mapped = { code: "BLE_BUSY", message: "蓝牙任务尚未结束，请稍后重试" };
+  if (error && error.appBluetoothAuthorized === "denied") mapped = { code: "PERMISSION_DENIED", message: "请在系统设置中允许微信使用蓝牙", action: "appSetting" };
+  else if (error && error.scopeBluetooth === false) mapped = { code: "PERMISSION_DENIED", message: "请在小程序设置中允许使用蓝牙", action: "openSetting" };
   if (!mapped && (lowerMessage.includes("auth") || lowerMessage.includes("permission") || lowerMessage.includes("authorize"))) {
     mapped = { code: "PERMISSION_DENIED", message: "微信蓝牙权限未开启，请在小程序设置中允许后重试", action: "openSetting" };
   }
@@ -54,6 +61,10 @@ function createBleError(error, stage) {
     stage,
     reason,
     errCode,
+    errno: error && error.errno,
+    state: error && error.state,
+    appBluetoothAuthorized: error && error.appBluetoothAuthorized,
+    scopeBluetooth: error && error.scopeBluetooth,
     detail: errMsg,
     message: mapped.message,
     action: mapped.action || "",
@@ -66,17 +77,6 @@ function normalizeMac(value) {
   return /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(text) ? text : "";
 }
 
-function callWx(method, options, stage) {
-  return new Promise((resolve, reject) => {
-    method(
-      Object.assign({}, options, {
-        success: resolve,
-        fail: (error) => reject(createBleError(error, stage)),
-      }),
-    );
-  });
-}
-
 class BleManager {
   constructor() {
     const boundDevice = storage.getBoundDevice();
@@ -87,6 +87,8 @@ class BleManager {
     this.healthSyncPromise = null;
     this.deviceEventUnsubscribe = null;
     this.connectPromise = null;
+    this.connectionTask = null;
+    this.scanGeneration = 0;
     this.connectingDeviceId = "";
     this.scanTicker = null;
     this.scanDeviceDebugSignature = "";
@@ -102,6 +104,7 @@ class BleManager {
       logs: [],
       error: "",
       healthRevision: 0,
+      healthRecords: {},
       healthSyncing: false,
       healthSyncProgress: 0,
       activeMeasurementType: "",
@@ -111,7 +114,7 @@ class BleManager {
       workoutRealtime: { activityTime: 0, steps: 0, distance: 0, calorie: 0, heartRate: 0 },
       workoutReports: [],
       workoutRevision: 0,
-      lastHealthSyncAt: boundDevice ? boundDevice.lastHealthSyncAt || 0 : 0,
+      lastHealthSyncAt: 0,
     };
   }
 
@@ -128,8 +131,14 @@ class BleManager {
         scanning: result.discovering,
         scanRemainingSeconds: result.discovering ? this.state.scanRemainingSeconds : 0,
       });
-      if (!result.available) this.handleDisconnected("手机蓝牙不可用");
+      if (!result.available) {
+        // 仅适配器就绪等待阶段保留任务；开始建链后仍按断连收口。
+        const task = this.connectionTask;
+        const awaitingAdapter = task && task.recovery && !task.connectionStarted && !this.sdk && !task.sdk;
+        if (!awaitingAdapter) this.handleDisconnected("手机蓝牙不可用");
+      }
     });
+    // 启动时静默等待，不在用户进入页面前弹提示。
     return this.ensureAdapter();
   }
 
@@ -156,9 +165,9 @@ class BleManager {
     return this.sdk;
   }
 
-  async ensureAdapter() {
+  async ensureAdapter(timeoutMs = 15000) {
     try {
-      await callWx(wx.openBluetoothAdapter, {}, "adapter");
+      await RingSdk.openAdapter({ timeoutMs });
       this.patch({ adapterAvailable: true, error: "" });
     } catch (error) {
       this.patch({ adapterAvailable: false, error: error.message });
@@ -168,10 +177,13 @@ class BleManager {
 
   async startScan() {
     await this.stopScan();
+    const generation = ++this.scanGeneration;
     this.patch({ devices: [], scanning: true, scanRemainingSeconds: 10, error: "" });
     this.log("开始搜索附近设备");
 
     try {
+      await this.ensureAdapter(30000);
+      if (generation !== this.scanGeneration) return;
       const scanDeadline = Date.now() + SCAN_TIMEOUT_MS;
       const applyDevices = (devices, source) => {
         const next = devices.map((device) => {
@@ -210,9 +222,11 @@ class BleManager {
           console.info(`[rwsdk-demo][scan] ${event}`, detail);
         },
         onDevices: (devices) => {
+          if (generation !== this.scanGeneration) return;
           applyDevices(devices, "callback");
         },
       });
+      if (generation !== this.scanGeneration) { await session.stop(); return; }
       this.scanSession = session;
       // 系统连接设备可能在 startScan() 返回前已完成查询，主动同步一次当前快照。
       applyDevices(session.getDevices(), "initial-snapshot");
@@ -231,6 +245,7 @@ class BleManager {
         }
       });
     } catch (error) {
+      if (generation !== this.scanGeneration) return;
       await this.stopScan();
       const bleError = createBleError(error, "scan");
       this.patch({ error: bleError.message });
@@ -239,24 +254,24 @@ class BleManager {
   }
 
   async stopScan() {
+    this.scanGeneration += 1;
     if (this.scanTicker) clearInterval(this.scanTicker);
     this.scanTicker = null;
     const session = this.scanSession;
     this.scanSession = null;
     if (session) await session.stop();
-    else if (this.state.scanning) {
-      await new Promise((resolve) => wx.stopBluetoothDevicesDiscovery({ complete: resolve }));
-    }
     if (this.state.scanning || this.state.scanRemainingSeconds) {
       this.patch({ scanning: false, scanRemainingSeconds: 0 });
     }
   }
 
-  connect(device) {
+  connect(device, recovery = false) {
     const target = device || this.state.boundDevice;
     if (!target || !target.deviceId) return Promise.reject(new Error("没有可连接的设备"));
     if (this.connectPromise) {
-      if (this.connectingDeviceId === target.deviceId) return this.connectPromise;
+      const key = normalizeMac(target.macAddress) || target.deviceId;
+      if (this.connectionTask && (this.connectionTask.key === key ||
+        ((!normalizeMac(target.macAddress) || !this.connectionTask.macAddress) && this.connectingDeviceId === target.deviceId))) return this.connectPromise;
       return Promise.reject(new BleClientError({
         code: "ALREADY_CONNECTING",
         stage: "connect",
@@ -265,14 +280,44 @@ class BleManager {
       }));
     }
     this.connectingDeviceId = target.deviceId;
-    this.connectPromise = this.performConnect(target).finally(() => {
+    const task = { key: normalizeMac(target.macAddress) || target.deviceId, macAddress: normalizeMac(target.macAddress), cancelled: false, sdkTask: null, recovery, connectionStarted: false };
+    this.connectionTask = task;
+    const cancellation = new Promise((_, reject) => { task.rejectCancelled = reject; });
+    const work = this.performConnect(target, task);
+    const promise = Promise.race([work, cancellation]).finally(() => {
+      if (this.connectionTask !== task) return;
+      this.connectionTask = null;
       this.connectPromise = null;
       this.connectingDeviceId = "";
     });
+    task.promise = promise;
+    this.connectPromise = promise;
     return this.connectPromise;
   }
 
-  async performConnect(target) {
+  cancelConnection(promise = this.connectPromise) {
+    const task = this.connectionTask;
+    if (!task || task.promise !== promise) return;
+    task.cancelled = true;
+    if (task.sdkTask) RingSdk.cancelReconnect(task.sdkTask);
+    let cleanup;
+    if (task.sdk) {
+      cleanup = task.sdk.disconnect("连接任务已取消").catch(() => undefined);
+      if (this.sdk === task.sdk) this.disposeRuntime("连接任务已取消");
+    }
+    this.connectionTask = null;
+    this.connectPromise = null;
+    this.connectingDeviceId = "";
+    task.rejectCancelled(new BleClientError({ code: "CANCELLED", reason: "CANCELLED", message: "连接已取消" }));
+    this.patch({ connectionState: "disconnected", error: "" });
+    return cleanup;
+  }
+
+  checkConnectionTask(task) {
+    if (task.cancelled || this.connectionTask !== task) throw new BleClientError({ code: "CANCELLED", reason: "CANCELLED", message: "连接已取消" });
+  }
+
+  async performConnect(target, task) {
     if (
       this.state.connectionState === "connected" &&
       this.activeDeviceId === target.deviceId
@@ -281,12 +326,13 @@ class BleManager {
     }
 
     await this.stopScan();
+    this.checkConnectionTask(task);
     const previousDeviceId = this.activeDeviceId;
     if (previousDeviceId && previousDeviceId !== target.deviceId) {
       this.markIntentionalDisconnect(previousDeviceId);
       if (this.sdk) await this.sdk.disconnect("切换连接设备").catch(() => undefined);
-      else await new Promise((resolve) => wx.closeBLEConnection({ deviceId: previousDeviceId, complete: resolve }));
     }
+    this.checkConnectionTask(task);
     this.disposeRuntime("开始新连接");
     this.activeDeviceId = target.deviceId;
     this.patch({ connectionState: "connecting", error: "" });
@@ -294,8 +340,9 @@ class BleManager {
 
     try {
       RingSdk.prepareAutoPassword(DEMO_DEVICE_PASSWORD);
-      this.sdk = await RingSdk.connect(target.deviceId, {
+      const options = {
         onConnectionStateChange: ({ deviceId, connected }) => {
+          if (task.cancelled) return;
           if (connected || deviceId !== this.activeDeviceId) return;
           if (this.intentionalDisconnectIds.has(deviceId)) {
             this.intentionalDisconnectIds.delete(deviceId);
@@ -304,6 +351,8 @@ class BleManager {
           this.handleDisconnected("设备连接已断开");
         },
         onStage: (stage) => {
+          if (task.cancelled || this.connectionTask !== task) return;
+          task.connectionStarted = true;
           if (stage === "initializing") {
             this.patch({ connectionState: "initializing" });
             this.log("连接成功，正在初始化设备");
@@ -339,7 +388,19 @@ class BleManager {
             }
           }
         },
-      });
+      };
+      const pending = task.recovery
+        ? RingSdk.reconnect({ deviceId: target.deviceId, macAddress: target.macAddress, adapterTimeoutMs: 30000, connectOptions: options })
+        : RingSdk.connect(target.deviceId, options);
+      if (task.recovery) task.sdkTask = pending;
+      const connectedSdk = await pending;
+      if (task.cancelled || this.connectionTask !== task) {
+        await connectedSdk.disconnect("连接任务已取消").catch(() => undefined);
+        this.checkConnectionTask(task);
+      }
+      this.sdk = connectedSdk;
+      task.sdk = connectedSdk;
+      this.activeDeviceId = connectedSdk.deviceId;
       this.deviceEventUnsubscribe = this.sdk.onDeviceEvent((event) => this.handleDeviceEvent(event));
       const supportMenu = this.sdk.supportMenu;
 
@@ -351,12 +412,17 @@ class BleManager {
       const power = results[0];
       const firmware = results[1];
       const macAddress = results[2];
+      this.checkConnectionTask(task);
+      // 断连可能发生在读取期间且错误被读取容错吞掉；保存绑定前确认连接仍存活。
+      if (this.sdk !== connectedSdk || this.state.connectionState === "disconnected") {
+        throw new BleClientError({ code: "CANCELLED", reason: "CANCELLED", message: "连接已断开" });
+      }
       const previousBoundDevice = this.state.boundDevice
-        && this.state.boundDevice.deviceId === target.deviceId
+        && ((normalizeMac(this.state.boundDevice.macAddress) && normalizeMac(this.state.boundDevice.macAddress) === normalizeMac(target.macAddress)) || this.state.boundDevice.deviceId === target.deviceId)
         ? this.state.boundDevice
         : null;
       const boundDevice = {
-        deviceId: target.deviceId,
+        deviceId: connectedSdk.deviceId,
         macAddress: macAddress
           || normalizeMac(target.macAddress)
           || (previousBoundDevice && previousBoundDevice.macAddress)
@@ -372,9 +438,6 @@ class BleManager {
           ? previousBoundDevice.boundAt
           : Date.now(),
         lastConnectedAt: Date.now(),
-        lastHealthSyncAt: previousBoundDevice && previousBoundDevice.lastHealthSyncAt
-          ? previousBoundDevice.lastHealthSyncAt
-          : 0,
       };
       if (boundDevice.macAddress) storage.saveDeviceAddress(boundDevice.deviceId, boundDevice.macAddress);
       storage.saveBoundDevice(boundDevice);
@@ -383,11 +446,17 @@ class BleManager {
         connectionState: "connected",
         error: "",
       };
-      if (!previousBoundDevice) connectedState.workoutReports = [];
+      if (!previousBoundDevice) {
+        connectedState.workoutReports = [];
+        connectedState.healthRecords = {};
+        connectedState.lastHealthSyncAt = 0;
+        connectedState.healthRevision = this.state.healthRevision + 1;
+      }
       this.patch(connectedState);
       this.log("设备初始化完成");
       return boundDevice;
     } catch (error) {
+      if (task.cancelled || this.connectionTask !== task) throw error;
       const bleError = createBleError(
         error,
         error && error.stage
@@ -402,25 +471,23 @@ class BleManager {
     }
   }
 
-  async reconnect() {
-    return this.connect(this.state.boundDevice);
+  reconnect() {
+    return this.connect(this.state.boundDevice, true);
   }
 
   async disconnect() {
+    await this.cancelConnection();
     const deviceId = this.activeDeviceId;
     const sdk = this.sdk;
     if (deviceId) this.markIntentionalDisconnect(deviceId);
     if (sdk) await sdk.disconnect("用户断开连接").catch(() => undefined);
-    else if (deviceId) await new Promise((resolve) => wx.closeBLEConnection({ deviceId, complete: resolve }));
     this.disposeRuntime("用户断开连接");
     this.patch({ connectionState: "disconnected" });
   }
 
   async unbind() {
-    const previous = this.state.boundDevice;
     await this.disconnect();
     storage.clearBoundDevice();
-    if (previous) storage.clearDeviceHealthRecords(previous.deviceId);
     this.activeDeviceId = "";
     this.patch({
       boundDevice: null,
@@ -428,6 +495,8 @@ class BleManager {
       healthSyncing: false,
       healthSyncProgress: 0,
       lastHealthSyncAt: 0,
+      healthRecords: {},
+      healthRevision: this.state.healthRevision + 1,
       workoutState: { sportType: 0, status: 4, isRunning: false },
       workoutRealtime: { activityTime: 0, steps: 0, distance: 0, calorie: 0, heartRate: 0 },
       workoutReports: [],
@@ -572,23 +641,29 @@ class BleManager {
     if (!this.state.boundDevice) return Promise.reject(new Error("尚未绑定设备"));
 
     const deviceId = this.state.boundDevice.deviceId;
+    const sdk = this.sdk;
     this.patch({ healthSyncing: true, healthSyncProgress: 0, error: "" });
     this.log("开始同步全部健康数据");
-    this.healthSyncPromise = this.sdk.syncAllHealthData({
+    const task = sdk.syncAllHealthData({
       onProgress: (progress) => {
-        this.patch({ healthSyncProgress: progress.percent });
+        if (this.sdk === sdk && this.state.boundDevice && this.state.boundDevice.deviceId === deviceId) {
+          this.patch({ healthSyncProgress: progress.percent });
+        }
       },
     }).then((result) => {
+      if (this.sdk !== sdk || !this.state.boundDevice || this.state.boundDevice.deviceId !== deviceId) {
+        throw new BleClientError({ code: "CANCELLED", reason: "CANCELLED", message: "健康数据同步已取消" });
+      }
       let recordCount = 0;
+      const healthRecords = {};
       Object.keys(result.records).forEach((type) => {
         const records = result.records[type] || [];
-        if (!records.length) return;
-        storage.saveHealthRecords(deviceId, type, records);
+        healthRecords[type] = records.slice().sort((first, second) => second.measuredAt - first.measuredAt);
         recordCount += records.length;
       });
       const lastHealthSyncAt = Date.now();
-      this.updateBoundDevice({ lastHealthSyncAt });
       this.patch({
+        healthRecords,
         healthRevision: this.state.healthRevision + 1,
         lastHealthSyncAt,
         healthSyncProgress: 100,
@@ -601,22 +676,12 @@ class BleManager {
       );
       return { recordCount, failedTypes, result };
     }).finally(() => {
+      if (this.healthSyncPromise !== task) return;
       this.healthSyncPromise = null;
       this.patch({ healthSyncing: false });
     });
-    return this.healthSyncPromise;
-  }
-
-  /** 健康解析模块得到业务数据后统一从这里写入，首页与历史页会立即刷新。 */
-  saveHealthRecord(type, record) {
-    if (!this.state.boundDevice) throw new Error("尚未绑定设备");
-    const saved = storage.saveHealthRecord(
-      this.state.boundDevice.deviceId,
-      type,
-      record,
-    );
-    this.patch({ healthRevision: this.state.healthRevision + 1 });
-    return saved;
+    this.healthSyncPromise = task;
+    return task;
   }
 
   updateBoundDevice(values) {
@@ -703,6 +768,16 @@ class BleManager {
 
   handleDisconnected(reason) {
     if (this.state.connectionState === "disconnected") return;
+    // 在途连接任务随断连立即终止：后续读取、绑定保存与状态回写不再继续。
+    const task = this.connectionTask;
+    if (task) {
+      task.cancelled = true;
+      if (task.sdkTask) RingSdk.cancelReconnect(task.sdkTask);
+      this.connectionTask = null;
+      this.connectPromise = null;
+      this.connectingDeviceId = "";
+      task.rejectCancelled(new BleClientError({ code: "CANCELLED", reason: "CANCELLED", message: `连接已断开：${reason}` }));
+    }
     this.disposeRuntime(reason);
     this.patch({ connectionState: "disconnected", error: reason });
     this.log(reason);
@@ -717,16 +792,25 @@ class BleManager {
 
   presentError(error, title = "蓝牙操作失败") {
     const bleError = createBleError(error, error && error.stage ? error.stage : "unknown");
-    const canOpenBluetooth = bleError.action === "bluetoothSetting" && wx.openSystemBluetoothSetting;
-    const canOpenSetting = bleError.action === "openSetting" && wx.openSetting;
+    const errorCode = typeof bleError.errCode === "number" ? bleError.errCode : bleError.code;
+    let platform = "";
+    try { platform = wx.getDeviceInfo?.().platform || ""; } catch (_) { /* 平台查询失败保持原行为 */ }
+    // iOS 打开微信的系统授权页，不依赖 Android 专用的系统蓝牙设置接口。
+    const canOpenBluetooth = bleError.action === "bluetoothSetting" && platform !== "ios"
+      && typeof wx.openSystemBluetoothSetting === "function";
+    const canOpenAppSetting = (bleError.action === "appSetting"
+      || (bleError.action === "bluetoothSetting" && platform === "ios"))
+      && typeof wx.openAppAuthorizeSetting === "function";
+    const canOpenSetting = bleError.action === "openSetting" && typeof wx.openSetting === "function";
     wx.showModal({
       title,
-      content: bleError.message,
-      showCancel: !!(canOpenBluetooth || canOpenSetting),
-      confirmText: canOpenBluetooth ? "去开蓝牙" : canOpenSetting ? "去授权" : "知道了",
+      content: errorCode ? `${bleError.message}\n错误码：${errorCode}` : bleError.message,
+      showCancel: !!(canOpenBluetooth || canOpenSetting || canOpenAppSetting),
+      confirmText: canOpenBluetooth ? "蓝牙设置" : canOpenSetting || canOpenAppSetting ? "去设置" : "知道了",
       success: (result) => {
         if (!result.confirm) return;
         if (canOpenBluetooth) wx.openSystemBluetoothSetting({});
+        else if (canOpenAppSetting) wx.openAppAuthorizeSetting({});
         else if (canOpenSetting) wx.openSetting({});
       },
     });

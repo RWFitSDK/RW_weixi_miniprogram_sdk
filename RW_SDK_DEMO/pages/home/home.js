@@ -21,14 +21,14 @@ Page({
         boundDevice: state.boundDevice,
         connectionState: state.connectionState,
         connected: state.connected,
-        healthCards: getHealthCards(state.boundDevice, state.realtimeHealth),
+        healthCards: getHealthCards(state.boundDevice, state.realtimeHealth, state.healthRecords),
         recordEnabled: !!(state.boundDevice && state.boundDevice.supportMenu && state.boundDevice.supportMenu.supportRecording),
         healthSyncing: state.healthSyncing,
         healthSyncProgress: state.healthSyncProgress,
         lastSyncText: state.healthSyncing
           ? `正在同步 ${state.healthSyncProgress}%`
-          : state.boundDevice && state.boundDevice.lastHealthSyncAt
-            ? `上次同步 ${formatTime(state.boundDevice.lastHealthSyncAt)}`
+          : state.lastHealthSyncAt
+            ? `上次同步 ${formatTime(state.lastHealthSyncAt)}`
             : "下拉同步全部健康数据"
       });
     });
@@ -36,10 +36,12 @@ Page({
 
   onShow() {
     const state = bleManager.snapshot();
-    this.setData({ healthCards: getHealthCards(state.boundDevice, state.realtimeHealth) });
+    this.setData({ healthCards: getHealthCards(state.boundDevice, state.realtimeHealth, state.healthRecords) });
   },
 
   onUnload() {
+    this.pageUnloaded = true;
+    if (this.connectionTask) bleManager.cancelConnection(this.connectionTask);
     if (this.unsubscribe) this.unsubscribe();
   },
 
@@ -51,10 +53,14 @@ Page({
       return;
     }
     try {
-      if (!state.connected) await bleManager.reconnect();
+      if (!state.connected) {
+        this.connectionTask = bleManager.reconnect();
+        await this.connectionTask;
+      }
+      if (this.pageUnloaded) return;
       const result = await bleManager.syncAllHealthData();
       const latestState = bleManager.snapshot();
-      this.setData({ healthCards: getHealthCards(latestState.boundDevice, latestState.realtimeHealth) });
+      this.setData({ healthCards: getHealthCards(latestState.boundDevice, latestState.realtimeHealth, latestState.healthRecords) });
       wx.showToast({
         title: result.failedTypes.length
           ? `同步完成，${result.failedTypes.length}项失败`
@@ -62,8 +68,10 @@ Page({
         icon: result.failedTypes.length ? "none" : "success",
       });
     } catch (error) {
+      if (this.pageUnloaded || error.reason === "CANCELLED") return;
       wx.showToast({ title: error.message || "同步失败", icon: "none" });
     } finally {
+      this.connectionTask = null;
       wx.stopPullDownRefresh();
     }
   },

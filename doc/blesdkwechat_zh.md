@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20261112`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20261116`。
 
 #### 1.1 适用平台与语言
 
@@ -16,7 +16,7 @@ RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能�
 
 | 术语 | 说明 |
 | --- | --- |
-| `deviceId` | 微信蓝牙 API 返回的设备标识。iOS 上不等同于 MAC 地址 |
+| `deviceId` | 微信蓝牙 API 返回的设备标识，各平台不同：<br>**iOS**：系统分配的 UUID，不等于 MAC 地址<br>**Android**：通常为设备 MAC 地址<br>**鸿蒙**：临时分配的地址，可能变化（[官方说明](https://developers.weixin.qq.com/miniprogram/dev/api/device/bluetooth/wx.onBluetoothDeviceFound.html)），不建议长期缓存直连<br>绑定设备应以广播 `macAddress` 为准；直连失败时重新搜索、按 `macAddress` 匹配到新的 `deviceId` 后再连接 |
 | BLE MAC | 设备广播数据中携带的 6 字节设备地址；iOS 上应与 `deviceId` 分开保存 |
 | SupportMenu | 连接成功后获取的设备功能配置表 |
 
@@ -78,6 +78,8 @@ const scan = await RingSdk.startScan({
 | `macAddress` | 广播解析出的 BLE MAC；未携带时回退为其它来源，可能为空字符串 |
 | `batteryStatus` | 广播携带的电量状态：`0` 未充电、`1` 充电中、`2` 充满；广播未携带时为 `undefined` |
 | `deviceForm` | 广播携带的产品形态：`0` 无屏戒指、`1` 有屏戒指、`2` 无屏手链、`3` 有屏手链、`4` 无屏手环、`5` 有屏手环、`6` 手表；广播未携带或为未知值时为 `-1` |
+| `deviceBodyColor` | 设备外观颜色：`0` 未设置、`1` 黑色、`2` 粉色、`3` 红色、`4` 银色、`5` 金色；`-1` 或 `undefined` 表示未提供或不支持，需设备固件支持 |
+| `deviceSize` | 设备尺寸号，如 `9` 表示9号、`10` 表示10号；`0` 未设置，`-1` 或 `undefined` 表示未提供或不支持，需设备固件支持 |
 | `systemConnected` | 当前SDK构建版本对应的系统连接设备为 `true` |
 
 ##### 3.1.2 停止搜索
@@ -112,21 +114,22 @@ console.log("是否支持心率", supportMenu.hr);
 | `initializing` | 设备已连接，正在完成 SDK 初始化并读取功能表 | 否 |
 | `ready` | 初始化及功能表读取完成 | 是 |
 
-`RingSdk.connect()` 的 Promise 只在进入 `ready` 后返回。成功返回后，可直接通过 `sdk.supportMenu` 获取本次连接已经读取的功能表，不需要再次请求设备；需要主动刷新功能表时才调用 `await sdk.readFunctionList()`。
+`connect()` 成功返回后可直接使用 `sdk.supportMenu`，无需再次读取功能表；需要刷新时调用 `await sdk.readFunctionList()`。
 
-支持设备密码认证的设备会在初始化期间自动校验预置密码，认证成功后才进入 `ready`；不支持该功能的设备保持原连接流程不变。设备明确返回认证失败时，连接 Promise 抛出 `RingSdkConnectionError`，其 `reason` 为 `PASSWORD_AUTH_FAILED`，SDK 同时关闭本次 BLE 连接。BLE 写入失败和指令超时继续沿用原有错误，不转换为密码认证错误。
+支持密码认证的设备会自动完成校验，认证失败时抛出 `reason: "PASSWORD_AUTH_FAILED"`。
 
-`onConnectionStateChange` 是可选的页面状态回调：进入 `ready` 时返回 `connected: true`，设备断开时返回 `connected: false`。连接失败会抛出 `RingSdkConnectionError`，其中包含 `errCode` 和 `detail`，不会进入 `ready`。
+连接失败抛出 `RingSdkConnectionError`，包含 `errCode` 和 `detail`。
 
 建议根据 `errCode` 向用户提供对应提示和操作：
 
 | 错误情况 | 建议提示与操作 |
 | --- | --- |
 | `10000` 蓝牙适配器未初始化 | 重新初始化蓝牙后再试 |
-| `10001` 蓝牙不可用 | 提示开启蓝牙；支持时调用 `wx.openSystemBluetoothSetting()` |
-| 权限拒绝 | 提示用户进入小程序设置；调用 `wx.openSetting()` |
+| `10001` 蓝牙不可用 | 提示“蓝牙暂不可用，请检查蓝牙权限后重试”，保留错误码；需要等待就绪时调用 `RingSdk.openAdapter()` |
+| 微信系统蓝牙权限拒绝 | `appBluetoothAuthorized === "denied"`，支持时调用 `wx.openAppAuthorizeSetting()` |
+| 小程序蓝牙权限拒绝 | `scopeBluetooth === false`，调用 `wx.openSetting()` |
 | `10002` / `10003` | 提示靠近设备，并确认设备未连接其他手机 |
-| `10004` / `10005` | 提示设备型号或固件不兼容 |
+| `10004` / `10005` | 提示靠近设备后重试；持续失败可开关手机蓝牙后重试 |
 | `10006` | 提示连接断开并提供重新连接入口 |
 | `10007` | 提示当前设备不支持该蓝牙操作 |
 | `10008` | 提示系统蓝牙繁忙，可重新开启蓝牙后重试 |
@@ -134,6 +137,9 @@ console.log("是否支持心率", supportMenu.hr);
 | `10012` | 提示操作超时并允许重试 |
 | `10013` | 提示蓝牙参数或设备数据无效，检查参数后重试 |
 | `reason: PASSWORD_AUTH_FAILED` | 提示设备密码不匹配，不能进入业务可用状态 |
+| `reason: CANCELLED` | 本次重连已取消，无需显示连接失败提示 |
+| `reason: BUSY` | 蓝牙资源仍在使用或清理中，稍后重试 |
+| `reason: STAGE_TIMEOUT` | 本次等待超时，可结合 `stage`、`detail` 排查后重试 |
 
 ##### 3.1.4 断开连接设备
 
@@ -141,26 +147,29 @@ console.log("是否支持心率", supportMenu.hr);
 await sdk.disconnect("user disconnected");
 ```
 
-`disconnect()` 用于主动断开设备。系统异常断连时 SDK 会自动释放当前实例，接入方无需再次调用 `dispose()`。
+`disconnect()` 用于主动断开设备。异常断连时 SDK 自动释放，无需手动清理。
 
 ##### 3.1.5 本地绑定与自动重连、解绑
 
-SDK 不强制绑定策略。建议连接初始化成功后保存 `deviceId`、设备名称、BLE MAC 和 `SupportMenu`：
+连接成功后建议保存 `deviceId`、`macAddress`、`supportMenu`，启动后调用 `RingSdk.reconnect({ deviceId, macAddress })` 重连，见 3.1.9。
 
-```js
-wx.setStorageSync("boundDevice", {
-  deviceId,
-  name,
-  macAddress,
-  supportMenu,
-});
-```
+解绑流程：
 
-小程序启动后可读取缓存并调用 `RingSdk.connect(deviceId)` 重连。对于支持设备密码认证的设备，解绑必须在设备保持连接时先调用 `await sdk.modifyDevicePwd("0000")`，成功后再断开设备并删除缓存；不支持该功能的设备保持原解绑流程。iOS 的 `deviceId` 由微信提供，不要自行当作 MAC 地址解析；应同时保存广播解析或设备指令返回的 BLE MAC。
-
-**iOS 解绑必须提示用户解除系统配对。** 小程序无法直接删除 iOS 保存的蓝牙配对关系。完成应用内解绑后，必须弹出明确提示，引导用户前往“系统设置 → 蓝牙”，找到对应设备并选择“忽略此设备”。支持 `wx.openSystemBluetoothSetting()` 时，应提供直接进入系统蓝牙设置的入口。
+- 支持密码认证的设备：连接状态下先调用 `await sdk.modifyDevicePwd("0000")`，成功后断开并删除缓存
+- 其它设备：直接断开并删除缓存
+- iOS 须提示用户前往"系统设置 → 蓝牙"忽略设备，小程序无法删除系统配对
 
 ##### 3.1.6 设备功能配置表
+
+> [!IMPORTANT]
+>
+> 功能表是设备能力说明，不是功能开关。功能支持标志为 `true` 表示支持，`false` 表示不支持。
+>
+> 修改 `SupportMenu` 属性或调用 SDK 设置接口，都不能让设备获得原本不支持的功能。SDK 接口只能控制设备已经支持的功能。
+>
+> 如需增加功能支持，须确认是否可通过适配固件升级实现；涉及硬件能力时，需更换支持该功能的设备型号。
+
+可根据业务需要保存功能表；更换设备或升级固件后，应重新获取。
 
 ```js
 const supportMenu = sdk.supportMenu;
@@ -205,6 +214,9 @@ const latestMenu = await sdk.readFunctionList();
 | `supportCustomerModel` | 客户型号设置与获取（3.2.1.34） |
 | `supportPpgSampleRate` | PPG 采样率设置与获取（5.2.5.4） |
 | `supportCustomTextDisplay` | 自定义字符显示与时长设置（3.2.1.32） |
+| `supportDeviceBodyColor` | 设备外观颜色设置与获取（3.2.1.36） |
+| `supportVibrationSwitch` | 震动总开关设置与获取（3.2.1.37） |
+| `supportDeviceSize` | 设备尺寸设置与获取（3.2.1.38） |
 
 调用相关接口前应先判断相应功能位。
 
@@ -238,6 +250,51 @@ RingSdk.setLogCallback(null);
 > [!TIP]
 > 建议先缓存日志，在一次功能操作完成后，或累计一定条数（如 20 条或 100 条）时，再批量保存或上传，避免每条日志单独上传。保存或上传方式由接入方自行实现。
 
+##### 3.1.8 等待蓝牙就绪
+
+首次授权或蓝牙暂不可用时，可先等待就绪，再搜索设备。
+
+```js
+await RingSdk.openAdapter({ timeoutMs: 30000 }); // 默认等待15秒，此处设置为30秒
+const scan = await RingSdk.startScan({ onDevices: (devices) => console.log(devices) });
+```
+
+失败或超时抛出错误，在 `catch` 中按 3.1.3 提示用户。手机蓝牙已关闭或权限被拒绝时直接失败，开启蓝牙或允许权限后需重新调用。
+
+##### 3.1.9 缓存设备重连
+
+同时传入已保存的 `deviceId` 与 `macAddress`。默认在鸿蒙直连失败后按 MAC 搜索设备；成功后应保存实际返回的 `sdk.deviceId`。
+
+```js
+const bound = wx.getStorageSync("boundDevice");
+const task = RingSdk.reconnect({
+  deviceId: bound.deviceId,
+  macAddress: bound.macAddress,
+  fallbackScanTimeoutMs: 6000, // 每轮搜索6秒
+  fallbackScanAttempts: 2, // 最多搜索2次
+  connectOptions: {
+    onStage: (stage) => console.log("连接阶段", stage),
+    onConnectionStateChange: ({ connected }) => console.log("连接状态", connected),
+  },
+});
+const sdk = await task;
+wx.setStorageSync("boundDevice", { ...bound, deviceId: sdk.deviceId, supportMenu: sdk.supportMenu });
+```
+
+| 可选参数 | 说明 |
+| --- | --- |
+| `scanFallback` | 默认 `"auto"`：仅鸿蒙启用搜索兜底；`"always"`：各平台启用；`"never"`：不搜索兜底。搜索兜底需提供有效 `macAddress` |
+| `adapterTimeoutMs` | 蓝牙就绪等待，默认15000毫秒；0表示跳过等待 |
+| `directConnectTimeoutMs` | 启用搜索兜底时的首次直连超时，默认5000毫秒 |
+| `fallbackScanTimeoutMs` | 每轮搜索时长，默认6000毫秒 |
+| `fallbackScanAttempts` | 搜索总次数，默认2次，包含第一次；至少1次，传0按1次处理 |
+| `cleanupTimeoutMs` | 连接或扫描清理的单次等待上限，默认2000毫秒 |
+| `connectOptions` | 与 `connect` 相同的连接参数和回调；其中 `connectTimeoutMs` 只控制建链，不是整轮重连时长 |
+
+轮间不重复直连，找到设备立即连接，全部未找到才返回搜索超时。
+
+取消重连：`RingSdk.cancelReconnect(task)`，已连接成功时用 `sdk.disconnect()`。
+
 ### 3.2 设备功能操作
 
 #### 3.2.1 基础功能指令接口
@@ -245,7 +302,7 @@ RingSdk.setLogCallback(null);
 ##### 3.2.1.0 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20261028"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20261116"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -290,8 +347,10 @@ console.log(firmware);
 | `screenType` | 0 方屏、1 圆屏 |
 | `screenWidth` / `screenHeight` | 屏幕宽高 |
 | `uiVersion` | UI 版本 |
-| `deviceForm` | 产品形态：`0` 无屏戒指、`1` 有屏戒指、`2` 无屏手链、`3` 有屏手链、`4` 无屏手环、`5` 有屏手环、`6` 手表；`-1` 未提供或不支持（旧固件回包无该字节） |
+| `deviceForm` | 产品形态：`0` 无屏戒指、`1` 有屏戒指、`2` 无屏手链、`3` 有屏手链、`4` 无屏手环、`5` 有屏手环、`6` 手表；`-1` 未提供或不支持 |
 | `customerModel` | 客户型号；未提供时与原设备型号一致 |
+| `deviceBodyColor` | 设备外观颜色：`0` 未设置、`1` 黑色、`2` 粉色、`3` 红色、`4` 银色、`5` 金色；`-1` 未提供或不支持，需设备固件支持 |
+| `deviceSize` | 设备尺寸号，如 `9` 表示9号、`10` 表示10号；`0` 未设置，`-1` 未提供或不支持。设置与查询见3.2.1.38 |
 
 固件升级前应读取并核对当前设备型号与固件版本。
 
@@ -529,7 +588,7 @@ await sdk.setAlarmVibrationDuration(2); // 0-6，0 不震动
 const off = sdk.onDeviceEvent((event) => {
   switch (event.type) {
     case "touch":
-      // keyType: 1 触摸，2 跌落（需开启跌落提醒 3.2.1.24），3 SOS，4 连续点击
+      // keyType: 1 触摸，2 跌落（需开启跌落提醒），3 SOS，4 连续点击
       // touchType: 触摸时 1 单击、2 双击、3 三击、4 长按、5 甩动、6 Release(长按后松手)；跌落时默认1；SOS时不使用；连续点击时为次数(1-9)
       if (event.keyType === 1 && event.touchType === 6) console.log("Release");
       else console.log(event.keyType, event.touchType);
@@ -553,7 +612,7 @@ const off = sdk.onDeviceEvent((event) => {
 | `recordRealtimeData` | 实时录音音频 | `sequence`（0-255 循环序号，255 后回到0，可检查丢包/顺序）、`audioData`（当前包原始 Opus 压缩音频） | 实时录音中设备主动推送；见 3.2.5.7 |
 | `countControl` | 计数识别状态 | `armed`：`true` 开启(Arm)、`false` 关闭(Disarm) | 开关状态变化时推送（含小程序控制与设备自动切换）；见 3.2.1.33 |
 | `muslimCount` | 赞念计数实时上报 | `count`（本次计数）、`timestamp`（Unix 毫秒）；一帧多项时逐项上报，每项一条事件 | 用户在设备上按键计数时上报，无需开启检测；见 3.2.1.15 |
-| `touch` | 触摸/跌落/SOS/连续点击事件 | `keyType`：`1` 触摸，`2` 跌落，`3` SOS，`4` 连续点击。<br>`touchType`：触摸时 `1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动、`6` Release(长按后松手)；跌落时默认 `1`；SOS时不使用；连续点击时表示次数(1-9) | 需设备固件支持；跌落提醒需开启 3.2.1.24 |
+| `touch` | 触摸/跌落/SOS/连续点击事件 | `keyType`：`1` 触摸，`2` 跌落，`3` SOS，`4` 连续点击。<br>`touchType`：触摸时 `1` 单击、`2` 双击、`3` 三击、`4` 长按、`5` 甩动、`6` Release(长按后松手)；跌落时默认 `1`；SOS时不使用；连续点击时表示次数(1-9) | 需设备固件支持；跌落提醒需开启 |
 
 触摸与跌落事件需设备固件支持。
 
@@ -580,17 +639,6 @@ await sdk.startFactoryTest(0x15);
 
 仅在厂家指导下使用工厂测试能力。
 
-##### 3.2.1.24 跌落提醒设置
-
-功能位：`supportFallDetect`。
-
-```js
-const enabled = await sdk.getFallDetect();
-await sdk.setFallDetect(true);
-```
-
-跌落发生时由 3.2.1.21 的 `touch` 事件返回，`keyType=2`。
-
 ##### 3.2.1.25 计数提醒间隔设置
 
 功能位：`supportCountReminder`。
@@ -612,7 +660,7 @@ RingSdk.prepareAutoPassword("1234");
 const sdk = await RingSdk.connect(deviceId);
 ```
 
-该方法只保存后续连接使用的密码，不会立即向设备发送指令。支持密码认证的设备会在连接初始化期间自动认证，成功后 `connect()` 才返回；不支持该功能的设备会跳过认证。
+保存密码，连接时自动认证，认证失败则 `connect()` 抛出错误。
 
 ###### 3.2.1.26.2 修改设备密码
 
@@ -799,13 +847,79 @@ console.log("客户型号:", model);
 
 获取固件信息时也可通过 `FirmwareInfo.customerModel` 读取客户型号。固件升级仍使用原设备型号 `deviceModel` 匹配固件。
 
+##### 3.2.1.36 设备外观颜色设置与获取
+
+> 功能配置表属性：`supportDeviceBodyColor`。设置或查询设备外观颜色，也可通过扫描结果或设备信息 `FirmwareInfo` 的 `deviceBodyColor` 读取，需设备固件支持。
+
+`setDeviceBodyColor(color: number): Promise<void>`
+
+`getDeviceBodyColor(): Promise<number>`
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| color | number | `0`：未设置<br>`1`：黑色<br>`2`：粉色<br>`3`：红色<br>`4`：银色<br>`5`：金色 |
+
+设置成功后 Promise 完成；查询成功返回颜色值，编码与 `color` 相同。失败时进入 `catch`。
+
+```js
+if (sdk.supportMenu.supportDeviceBodyColor) {
+  await sdk.setDeviceBodyColor(4);
+  const color = await sdk.getDeviceBodyColor();
+  console.log("外观颜色:", color);
+}
+```
+
+##### 3.2.1.37 震动总开关设置与获取
+
+> 功能配置表属性：`supportVibrationSwitch`。设置或查询设备震动总开关，需设备固件支持。
+
+`setVibrationSwitch(enabled: boolean): Promise<void>`
+
+`getVibrationSwitch(): Promise<boolean>`
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| enabled | boolean | `true`：开启<br>`false`：关闭 |
+
+设置成功后 Promise 完成；查询成功返回当前开关，`true` 表示开启，`false` 表示关闭。失败时进入 `catch`。
+
+```js
+if (sdk.supportMenu.supportVibrationSwitch) {
+  await sdk.setVibrationSwitch(true);
+  const enabled = await sdk.getVibrationSwitch();
+  console.log("震动总开关:", enabled);
+}
+```
+
+##### 3.2.1.38 设备尺寸设置与获取
+
+> 功能配置表属性：`supportDeviceSize`。设置或查询设备尺寸，也可通过扫描结果或设备信息 `FirmwareInfo` 的 `deviceSize` 读取，需设备固件支持。
+
+`setDeviceSize(size: number): Promise<void>`
+
+`getDeviceSize(): Promise<number>`
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| size | number | 设备尺寸号，如 `9` 表示9号、`10` 表示10号；`0` 表示未设置 |
+
+设置成功后 Promise 完成；查询成功返回当前尺寸号，`0` 表示未设置。失败时进入 `catch`。
+
+```js
+if (sdk.supportMenu.supportDeviceSize) {
+  await sdk.setDeviceSize(9);
+  const size = await sdk.getDeviceSize();
+  console.log("设备尺寸:", size);
+}
+```
+
 #### 3.2.2 健康数据同步（实时单次与全天检测）
 
 实时单次检测由小程序启动后立即返回过程数据；全天检测由设备按计划测量并保存历史数据。睡眠没有实时单次检测。
 
 ##### 3.2.2.0 实时检测——单项检测
 
-使用 `controlOpen()` 管理单次检测：`1` 开始、`0` 停止。实时数据通过 `onData` 返回，检测结束通过 `onFinished` 返回，SDK 不负责持久化。同一时间只开启一种检测。
+使用 `controlOpen()` 管理单次检测：`1` 开始、`0` 停止。实时数据通过 `onData` 返回，检测结束通过 `onFinished` 返回。同一时间只开启一种检测。
 
 ```js
 const { HealthMeasurementType } = require("./sdk/rw-ble-sdk.min.js");
@@ -819,7 +933,15 @@ sdk.controlOpen(1, HealthMeasurementType.HEART_RATE, {
 sdk.controlOpen(0, HealthMeasurementType.HEART_RATE, { onFinished: () => {} });
 ```
 
-完成、失败或断连后自动注销；检测长时间未结束时 SDK 会自动停止并返回 `reason: "timeout"`。页面退出可调用 `takeHealthMeasurement()` 仅注销监听（不停止设备测量）。重复开始会替换旧监听，同一时间只保留一个会话。`onFinished(result)` 中 `result.endResult` 为设备结束帧携带的结果码：`0` 正常，`2` 未佩戴（此时 `success` 为 `false`），旧固件无该字节时为 `undefined`。
+- 结束或断连后自动注销；超时自动停止并返回 `reason: "timeout"`
+- 页面退出可调用 `takeHealthMeasurement()` 仅注销监听
+- `onFinished(result)` 中 `result.endResult`：
+
+| 值 | 说明 |
+| --- | --- |
+| `0` | 正常 |
+| `2` | 未佩戴（`success` 为 `false`） |
+| `undefined` | 旧固件无该字段 |
 
 支持的 `HealthMeasurementType`：
 
@@ -1070,71 +1192,12 @@ console.log(result.errors);  // 单项失败不阻断其他类型
 
 > OTA 文件必须由设备厂家提供，并确认适用于当前设备。升级期间需保持小程序前台运行、蓝牙开启并让设备靠近手机。发布前必须使用目标设备验证升级成功、异常固件拒绝和中途断连等情况。
 
-##### 3.2.3.1 获取可用固件
+##### 3.2.3.1 执行 OTA 升级
 
-可通过以下接口查询指定设备型号的可用固件列表：
-
-```http
-GET https://ruiwo168.com/api/device/getOtaListByModel?model=<deviceModel>
-```
-
-查询参数 `model` 对应 `readFirmwareVersion()` 返回的 `FirmwareInfo.deviceModel`。请求前应先读取设备固件信息，并使用设备实际返回的 `deviceModel` 作为 `model`：
-
-```js
-const firmware = await sdk.readFirmwareVersion();
-if (!firmware || !firmware.deviceModel) {
-  throw new Error("未读取到设备型号");
-}
-
-const result = await new Promise((resolve, reject) => {
-  wx.request({
-    url: "https://ruiwo168.com/api/device/getOtaListByModel",
-    data: { model: firmware.deviceModel },
-    success: ({ data }) => resolve(data),
-    fail: reject,
-  });
-});
-
-console.log("当前版本", firmware.version);
-console.log("可用固件", result.data || []);
-```
-
-接口返回示例：
-
-```json
-{
-  "code": 0,
-  "msg": "操作成功",
-  "data": [
-    {
-      "deviceModel": "DEVICE_MODEL",
-      "toVersion": "X.Y.Z",
-      "size": 123456,
-      "downloadUrl": "https://example.com/path/firmware.bin"
-    }
-  ]
-}
-```
-
-OTA 流程只需关注 `data` 中的以下字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `deviceModel` | String | 固件适用的设备型号，必须与 `FirmwareInfo.deviceModel` 完全一致 |
-| `toVersion` | String | 目标固件版本，正式发布时用于判断是否有更高版本可升级 |
-| `size` | Number | 固件文件大小，单位为字节（Byte） |
-| `downloadUrl` | String | 固件文件下载地址 |
-
-正式发布时，应按 `X.Y.Z` 各段数值比较当前版本 `FirmwareInfo.version` 与目标版本 `toVersion`，不能直接按字符串比较。测试时可在确认设备型号和固件包正确的前提下，执行同版本升级或降级测试。
-
-使用 `wx.request()` 和 `wx.downloadFile()` 前，需要在微信公众平台配置对应的 request、downloadFile 合法域名。如使用自有服务器，请自行维护设备型号、版本号与固件包之间的对应关系。
-
-##### 3.2.3.2 执行 OTA 升级
-
-固件文件可通过以下方式获取：
+固件文件由客户自行管理，可通过以下方式获取：
 
 - 使用 `wx.chooseMessageFile()` 从微信聊天或文件传输助手选择。
-- 使用上述接口或自有服务器获取下载地址，再通过 `wx.downloadFile()` 下载。
+- 使用客户自行提供的下载地址，通过 `wx.downloadFile()` 下载；需在微信公众平台配置对应的 downloadFile 合法域名。
 
 无论使用哪种方式，升级前都必须核对当前设备型号和固件版本，确认固件适用于当前设备。
 
@@ -1418,7 +1481,7 @@ const result = await sdk.recordRealtimeControl(true);   // 先注册监听再启
 
 先注册监听再启动。操作后的实际录制状态经 `getRecordStatus()` 或 `recordStatus` 事件获取（`realtime` 表示当前是否为实时方式）。实时音频为高频数据，请勿在事件回调中执行耗时操作。
 
-#### 5.2.5 传感器原始数据
+#### 5.2.5 传感器原始数据（定制功能）
 
 | 数据 | 获取方式 |
 | --- | --- |
@@ -1535,6 +1598,14 @@ console.log("PPG 采样率:", sampleRate, "Hz");
 
 ## SDK修订记录
 
+**RW_SDK_V2.0.0_20261116** (2026.11.16)
+
+- 新增震动总开关设置与获取接口 `setVibrationSwitch`/`getVibrationSwitch`（3.2.1.37），功能表新增 `supportVibrationSwitch`
+- 新增设备外观颜色设置与获取接口 `setDeviceBodyColor`/`getDeviceBodyColor`（3.2.1.36），功能表新增 `supportDeviceBodyColor`
+- 新增设备尺寸设置与获取接口 `setDeviceSize`/`getDeviceSize`（3.2.1.38），功能表新增 `supportDeviceSize`
+- 新增等待蓝牙就绪接口 `RingSdk.openAdapter`（3.1.8）
+- 新增缓存设备重连接口 `RingSdk.reconnect`（3.1.9）
+
 **RW_SDK_V2.0.0_20261112** (2026.11.12)
 
 - 新增日志回调 `RingSdk.setLogCallback`（3.1.7），可获取蓝牙收发十六进制、连接过程及错误日志，由接入方自行保存或上传；默认关闭
@@ -1579,7 +1650,7 @@ console.log("PPG 采样率:", sampleRate, "Hz");
 - 添加即时屏幕控制功能(3.2.1.27)
 - 添加调试、测试用自定义设备时间设置接口 `setDeviceTime`
 - 添加授权密码重置功能（3.2.1.26.3）
-- 补充获取可用固件及OTA型号、版本校验说明(3.2.3.1)
+- 补充OTA型号、版本校验说明(3.2.3.1)
 
 **RW_SDK_V2.0.0_20260807** (2026.08.07)
 - 添加设备密码认证功能

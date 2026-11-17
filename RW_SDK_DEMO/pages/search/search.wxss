@@ -147,7 +147,16 @@
   color: #74827b;
 }
 
+.search-appearance {
+  margin-top: 8rpx;
+  color: #46705f;
+  font-size: 22rpx;
+  line-height: 32rpx;
+  overflow-wrap: break-word;
+}
+
 .signal {
+  flex: none;
   margin-left: 14rpx;
   text-align: right;
 }

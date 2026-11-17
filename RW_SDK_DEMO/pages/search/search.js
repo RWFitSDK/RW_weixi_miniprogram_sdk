@@ -1,4 +1,5 @@
 const bleManager = require("../../services/bleManager");
+const { formatDeviceAppearance } = require("../../utils/deviceAppearance");
 
 function presentDevices(devices) {
   return devices.map((device) => ({
@@ -10,11 +11,8 @@ function presentDevices(devices) {
     systemConnected: !!device.systemConnected,
     macAddressText: device.macAddress || "未从广播获取",
     deviceIdText: device.deviceId,
+    appearanceText: formatDeviceAppearance(device),
     batteryStatusText: ({ 0: "未充电", 1: "充电中", 2: "充满" })[device.batteryStatus] || "",
-    deviceFormText: ({
-      0: "无屏戒指", 1: "有屏戒指", 2: "无屏手链", 3: "有屏手链",
-      4: "无屏手环", 5: "有屏手环", 6: "手表"
-    })[device.deviceForm] || "",
     signalText: device.systemConnected
       ? "已系统配对"
       : device.RSSI >= -55 ? "信号强" : device.RSSI >= -72 ? "信号良好" : "信号较弱"
@@ -45,6 +43,8 @@ Page({
   },
 
   onUnload() {
+    this.pageUnloaded = true;
+    if (this.connectionTask) bleManager.cancelConnection(this.connectionTask);
     if (this.unsubscribe) this.unsubscribe();
     bleManager.stopScan();
   },
@@ -73,14 +73,20 @@ Page({
     this.setData({ connectingId: deviceId });
     wx.showLoading({ title: "连接并初始化", mask: true });
     try {
-      await bleManager.connect(device);
+      this.connectionTask = bleManager.connect(device);
+      await this.connectionTask;
+      if (this.pageUnloaded) return;
       wx.hideLoading();
       wx.showToast({ title: "绑定成功", icon: "success" });
       setTimeout(() => wx.navigateBack(), 500);
     } catch (error) {
+      if (this.pageUnloaded || error.reason === "CANCELLED") return;
       wx.hideLoading();
       this.setData({ connectingId: "" });
       bleManager.presentError(error, "连接失败");
+    } finally {
+      this.connectionTask = null;
+      wx.hideLoading();
     }
   },
 

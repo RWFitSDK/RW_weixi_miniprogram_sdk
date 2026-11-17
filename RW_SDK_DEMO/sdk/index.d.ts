@@ -21,8 +21,12 @@ export interface FirmwareInfo {
 	/** 客户型号，未提供时使用原设备型号。 */
 	customerModel?: string;
 	uiVersion?: string;
-	/** 产品形态: 0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表; -1 未提供或不支持(旧回包无该字节)。 */
+	/** 产品形态: 0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表; -1 未提供或不支持。 */
 	deviceForm: number;
+	/** 外观颜色：0未设置，1黑色、2粉色、3红色、4银色、5金色；-1未提供或不支持。 */
+	deviceBodyColor: number;
+	/** 设备尺寸：0未设置，其它非负值为尺寸号；-1未提供或不支持。 */
+	deviceSize: number;
 }
 /** 设备功能配置表的只读模型。 */
 export interface SupportMenu {
@@ -97,6 +101,9 @@ export interface SupportMenu {
 	bloodSugar: boolean;
 	muslimCountData: boolean;
 	temperature: boolean;
+	supportVibrationSwitch: boolean;
+	supportDeviceBodyColor: boolean;
+	supportDeviceSize: boolean;
 }
 /**
  * 健康历史数据解析。
@@ -432,9 +439,41 @@ export type DeviceEventHandler = (event: DeviceEvent) => void;
 export declare const SDK_VERSION: string;
 /** 获取当前 SDK 版本号。 */
 export declare function getSDKVersion(): string;
+type ErrorStage = "scan" | "connect" | "initialize" | "disconnect";
+type FailureReason = "PASSWORD_AUTH_FAILED" | "CANCELLED" | "BUSY" | "STAGE_TIMEOUT";
+type Authorization = "authorized" | "denied" | "not determined" | "unknown";
+export declare class RingSdkConnectionError extends Error {
+	readonly stage: ErrorStage;
+	readonly reason?: FailureReason | undefined;
+	readonly name = "RingSdkConnectionError";
+	readonly errCode?: number;
+	readonly errno?: number;
+	readonly errMsg?: string;
+	readonly state?: number;
+	readonly detail: string;
+	appBluetoothAuthorized?: Authorization;
+	scopeBluetooth?: boolean | "unknown";
+	constructor(stage: ErrorStage, cause: unknown, reason?: FailureReason | undefined);
+}
 export type RingSdkConnectionStage = "connecting" | "initializing" | "ready";
 export type RingSdkErrorStage = "scan" | "connect" | "initialize" | "disconnect";
-export type RingSdkConnectionFailureReason = "PASSWORD_AUTH_FAILED";
+export type RingSdkConnectionFailureReason = FailureReason;
+export interface RingSdkOpenAdapterOptions {
+	timeoutMs?: number;
+}
+export interface RingSdkReconnectOptions {
+	deviceId: string;
+	macAddress?: string;
+	scanFallback?: "auto" | "always" | "never";
+	adapterTimeoutMs?: number;
+	directConnectTimeoutMs?: number;
+	/** 每轮兜底搜索时长，默认6000毫秒。 */
+	fallbackScanTimeoutMs?: number;
+	/** 兜底搜索总次数，默认2；小于1时按1次处理。 */
+	fallbackScanAttempts?: number;
+	cleanupTimeoutMs?: number;
+	connectOptions?: RingSdkConnectOptions;
+}
 export interface RingSdkConnectionState {
 	deviceId: string;
 	connected: boolean;
@@ -460,8 +499,12 @@ export interface RingSdkScanDevice {
 	macAddress: string;
 	/** 广播 offset 13 电量状态：0 未充电，1 充电中，2 充满；广播未携带、为非状态值（如旧固件 0x80）或系统连接设备无广播时为 undefined。 */
 	batteryStatus?: number;
-	/** 广播 offset 14 产品形态：0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表；广播未携带或未知值为 -1，系统连接设备无广播时沿用上次值。 */
+	/** 产品形态：0无屏戒指,1有屏戒指,2无屏手链,3有屏手链,4无屏手环,5有屏手环,6手表；未提供或不支持为-1，系统连接设备无广播时沿用上次值。 */
 	deviceForm?: number;
+	/** 外观颜色：0未设置，1黑、2粉、3红、4银、5金；未提供或不支持为-1，系统连接设备无广播时沿用上次值。 */
+	deviceBodyColor?: number;
+	/** 设备尺寸：0未设置，其它值为尺寸号；未提供或不支持为-1，系统连接设备无广播时沿用上次值。 */
+	deviceSize?: number;
 	/** 可确认属于当前SDK构建版本的系统连接设备为true。 */
 	systemConnected: boolean;
 	[key: string]: unknown;
@@ -481,14 +524,6 @@ export interface RingSdkScanSession {
 	getDevices(): RingSdkScanDevice[];
 	/** 主动停止搜索。 */
 	stop(): Promise<RingSdkScanDevice[]>;
-}
-export declare class RingSdkConnectionError extends Error {
-	readonly stage: RingSdkErrorStage;
-	readonly reason?: RingSdkConnectionFailureReason | undefined;
-	readonly name = "RingSdkConnectionError";
-	readonly errCode?: number;
-	readonly detail: string;
-	constructor(stage: RingSdkErrorStage, cause: unknown, reason?: RingSdkConnectionFailureReason | undefined);
 }
 /**
  * 微信小程序 BLE SDK 高层入口。
@@ -595,6 +630,18 @@ export declare class RingSdk {
 	setCustomerModel(model: string): Promise<void>;
 	/** 获取当前客户型号，默认与原设备型号一致。 */
 	getCustomerModel(): Promise<string>;
+	/** 设置震动总开关，需功能表 supportVibrationSwitch。 */
+	setVibrationSwitch(enabled: boolean): Promise<void>;
+	/** 获取震动总开关。 */
+	getVibrationSwitch(): Promise<boolean>;
+	/** 设置外观颜色，需功能表 supportDeviceBodyColor。0未设置，1黑、2粉、3红、4银、5金。 */
+	setDeviceBodyColor(color: number): Promise<void>;
+	/** 获取外观颜色。 */
+	getDeviceBodyColor(): Promise<number>;
+	/** 设置设备尺寸，需功能表 supportDeviceSize。0未设置，其它值为尺寸号。 */
+	setDeviceSize(size: number): Promise<void>;
+	/** 获取设备尺寸。 */
+	getDeviceSize(): Promise<number>;
 	/**
 	 * 设备身份认证(协议2.1.5)：透传云端挑战值，返回设备 HMAC-SHA256 应答(64位hex)。
 	 * 挑战值须为64个hex字符(32字节，兼容分隔符)；应答校验由业务与云端完成。
@@ -673,6 +720,12 @@ export declare class RingSdk {
 	/** 授权下一次连接重置设备密码；调用方应先在业务层完成重置资格校验。 */
 	static preparePasswordReset(targetPassword?: string | null): void;
 	static connect(deviceId: string, options?: RingSdkConnectOptions): Promise<RingSdk>;
+	/** 等待手机蓝牙可用；不弹业务提示或跳转设置。 */
+	static openAdapter(options?: RingSdkOpenAdapterOptions): Promise<void>;
+	/** 缓存地址重连；可按广播 MAC 搜索兜底，同目标共享本次任务。 */
+	static reconnect(options: RingSdkReconnectOptions): Promise<RingSdk>;
+	/** 仅取消传入的在途重连任务，已结束任务不影响新连接。 */
+	static cancelReconnect(task: Promise<RingSdk>): void;
 	/** 搜索当前构建品牌的设备；可确认品牌的iOS系统连接设备会一同返回。 */
 	static startScan(options?: RingSdkScanOptions): Promise<RingSdkScanSession>;
 	/** 主动断开并释放 SDK 持有的微信 BLE 监听。 */

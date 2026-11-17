@@ -1,4 +1,3 @@
-const storage = require("./storage");
 const { formatTime } = require("./format");
 
 const HEALTH_TYPES = [
@@ -47,6 +46,9 @@ const SETTING_TYPES = [
   { id: "countControl", title: "计数识别", subtitle: "开启/关闭计数识别或查询当前状态；设备推送自动更新", support: (m) => m.supportCountControl },
   { id: "ppgSampleRate", title: "PPG 采样率", subtitle: "查询或设置采样率，单位 Hz", support: (m) => m.supportPpgSampleRate },
   { id: "customerModel", title: "客户型号", subtitle: "查询或设置客户型号", support: (m) => m.supportCustomerModel },
+  { id: "vibrationSwitch", title: "震动总开关", subtitle: "查询、开启或关闭设备震动", support: (m) => m.supportVibrationSwitch },
+  { id: "deviceBodyColor", title: "外观颜色", subtitle: "查询或设置设备外观颜色", support: (m) => m.supportDeviceBodyColor },
+  { id: "deviceSize", title: "设备尺寸", subtitle: "查询或设置设备尺寸号", support: (m) => m.supportDeviceSize },
   { id: "raiseToWake", title: "抬腕亮屏", subtitle: "设置开关与生效时段", support: (m) => m.raiseBrightScreen },
   { id: "ledLevel", title: "LED 亮度", subtitle: "设置 LED 开关与亮度", support: (m) => m.ledLight },
   { id: "timeFormat", title: "12/24小时制", subtitle: "设置设备时间显示格式", support: (m) => m.ledLight },
@@ -114,10 +116,10 @@ const SETTING_TYPES = [
   { id: "deviceChallenge", title: "设备身份认证", subtitle: "演示挑战应答(实际由云端下发)", support: (m) => m.supportDeviceChallenge, action: true },
 ];
 
-function getHealthCards(device, realtimeHealth = {}) {
+function getHealthCards(device, realtimeHealth = {}, healthRecords = {}) {
   if (!device || !device.supportMenu) return [];
   return HEALTH_TYPES.filter((item) => item.support(device.supportMenu)).map((item) => {
-    const records = item.type === "workout" ? [] : storage.getHealthRecords(device.deviceId, item.type);
+    const records = item.type === "workout" ? [] : healthRecords[item.type] || [];
     const historical = item.type === "steps"
       ? records.find((record) => String(record.id || "").startsWith("steps-day-")) || records[0]
       : records[0];

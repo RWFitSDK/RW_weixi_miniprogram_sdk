@@ -1,5 +1,4 @@
 const bleManager = require("../../services/bleManager");
-const storage = require("../../utils/storage");
 const { findHealthType } = require("../../utils/capabilities");
 const { formatTime } = require("../../utils/format");
 
@@ -123,12 +122,12 @@ Page({
       this.setData({ records: [], latestValue: "暂无数据", latestTime: "尚未绑定设备" });
       return;
     }
-    const storedRecords = storage.getHealthRecords(device.deviceId, this.data.type);
-    const records = buildHistoryRecords(storedRecords, this.data.type, this.data.unit);
+    const currentRecords = state.healthRecords[this.data.type] || [];
+    const records = buildHistoryRecords(currentRecords, this.data.type, this.data.unit);
     const realtime = state.realtimeHealth[this.data.type] || null;
     const latestHistorical = this.data.type === "steps"
-      ? storedRecords.find((record) => String(record.id || "").startsWith("steps-day-")) || storedRecords[0]
-      : storedRecords[0];
+      ? currentRecords.find((record) => String(record.id || "").startsWith("steps-day-")) || currentRecords[0]
+      : currentRecords[0];
     const latest = realtime || latestHistorical || null;
     this.setData({
       records,
