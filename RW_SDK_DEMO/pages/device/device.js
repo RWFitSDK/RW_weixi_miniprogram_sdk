@@ -127,7 +127,8 @@ Page({
       console.log("onDeviceEvent", event);
       if (event.type === "sensorStopped") {
         console.log("device stopped sensor", event.reason);
-        this.updateSettingValue("sensorRawPPG", "采集完成");
+        const reasonText = { 1: "App主动停止", 2: "采集完成", 9: "未佩戴" }[event.reason] || "采集已停止";
+        this.updateSettingValue("sensorRawPPG", reasonText);
         return;
       }
       // 计数识别状态推送(含小程序控制与设备自动切换)自动更新条目
@@ -524,7 +525,7 @@ Page({
       },
       onFinished: (result) => {
         if (sdk !== bleManager.getSdk()) return;
-        if (result.endResult === 2) {
+        if (result.endResult === 9) {
           updateStatus("未佩戴");
           wx.showToast({ title: "未佩戴，请佩戴后重试", icon: "none" });
         } else {

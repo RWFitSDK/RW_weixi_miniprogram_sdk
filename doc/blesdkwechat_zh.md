@@ -4,7 +4,7 @@
 
 RW BLE 微信小程序 SDK 用于在微信小程序中搜索、连接 RW 智能戒指，读取设备信息、配置设备功能、同步健康数据、控制多运动、获取传感器原始数据及执行 OTA 升级。
 
-当前 SDK 版本：`RW_SDK_V2.0.0_20261116`。
+当前 SDK 版本：`RW_SDK_V2.0.0_20261120`。
 
 #### 1.1 适用平台与语言
 
@@ -302,7 +302,7 @@ wx.setStorageSync("boundDevice", { ...bound, deviceId: sdk.deviceId, supportMenu
 ##### 3.2.1.0 Get SDK Version
 
 ```js
-const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20261116"
+const version = sdk.getSDKVersion(); // "RW_SDK_V2.0.0_20261120"
 
 // 也可以通过顶层接口或常量读取：
 const RWSDK = require("./sdk/rw-ble-sdk.min.js");
@@ -940,7 +940,7 @@ sdk.controlOpen(0, HealthMeasurementType.HEART_RATE, { onFinished: () => {} });
 | 值 | 说明 |
 | --- | --- |
 | `0` | 正常 |
-| `2` | 未佩戴（`success` 为 `false`） |
+| `9` | 未佩戴（`success` 为 `false`） |
 | `undefined` | 旧固件无该字段 |
 
 支持的 `HealthMeasurementType`：
@@ -966,7 +966,7 @@ sdk.controlCompositeMeasurement(1, {
   onStarted: () => console.log("综合检测已开始"),
   onData: (items) => items.forEach((item) => console.log(item.healthType, item.value)),
   onFinished: (result) => {
-    if (result.endResult === 2) console.log("未佩戴，请佩戴后重试");
+    if (result.endResult === 9) console.log("未佩戴，请佩戴后重试");
     else console.log("综合检测结束", result.success);
   },
 });
@@ -974,7 +974,7 @@ sdk.controlCompositeMeasurement(1, {
 sdk.controlCompositeMeasurement(0, { onFinished: () => {} });
 ```
 
-收到数据不代表整轮结束，以 `onFinished` 为准；未佩戴时 `success=false`、`endResult=2`。
+收到数据不代表整轮结束，以 `onFinished` 为准；未佩戴时 `success=false`、`endResult=9`。
 
 ##### 3.2.2.2 全天检测——设置健康数据全天监听间隔
 
@@ -1524,6 +1524,8 @@ const ppgPlan = await sdk.getMonitoring("ppg");
 
 ##### 5.2.5.1 启动与关闭传感器原始数据
 
+采集停止时，通过 `sensorStopped` 事件返回 `reason`：`1` App主动停止、`2` 采集完成、`9` 未佩戴。启动/关闭指令成功不代表采集完成。
+
 ```js
 const { SensorRawControl } = require("./sdk/rw-ble-sdk.min.js");
 
@@ -1597,6 +1599,11 @@ console.log("PPG 采样率:", sampleRate, "Hz");
 ```
 
 ## SDK修订记录
+
+**RW_SDK_V2.0.0_20261120** (2026.11.20)
+
+- 单项检测、综合检测及 PPG 原始数据采集的未佩戴返回码统一为 `9`。
+- 优化 iOS 小程序固件升级的发包节奏。
 
 **RW_SDK_V2.0.0_20261116** (2026.11.16)
 

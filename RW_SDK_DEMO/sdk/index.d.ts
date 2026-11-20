@@ -360,7 +360,7 @@ export interface MeasurementSessionResult {
 	success: boolean;
 	/** device=设备结束帧; timeout=70s超时; error=开始指令失败。 */
 	reason: "device" | "timeout" | "error";
-	/** 设备结束帧携带的检测结果码(协议2.3.1): 0x00正常, 0x02未佩戴; 旧固件无该字节为 undefined。 */
+	/** 检测结束结果码：0正常，9未佩戴；旧固件无该字节为 undefined。 */
 	endResult?: number;
 }
 export interface CompositeMeasurementHandlers {
@@ -535,7 +535,7 @@ export declare class RingSdk {
 	/**
 	 * 综合检测(协议2.3.1, DataType 0x051F)。需功能表 supportCompositeMeasurement。
 	 * 每个完整组合包通过一次 onData 返回全部项目(CompositeHealthItem[]);单项检测仍走 controlOpen。
-	 * onFinished.result.endResult: 2=未佩戴(success=false), 0=正常; 旧固件无该字节为 undefined。
+	 * onFinished.result.endResult: 9=未佩戴(success=false), 0=正常; 旧固件无该字节为 undefined。
 	 */
 	controlCompositeMeasurement(type: 0 | 1, handlers: CompositeMeasurementHandlers): void;
 	/** 注销综合检测监听，不发送停止指令。 */
@@ -736,6 +736,8 @@ export declare class RingSdk {
 	/** 修改设备密码；成功后同步自动认证密码，保证下次重连用新密码认证（对齐iOS）。 */
 	modifyDevicePwd(password?: string | null): Promise<void>;
 }
+/** SDK对外统一的未佩戴结果码。 */
+export declare const ERROR_NOT_WORN = 9;
 export declare const HealthMeasurementType: {
 	readonly HEART_RATE: 3;
 	readonly BLOOD_PRESSURE: 4;
