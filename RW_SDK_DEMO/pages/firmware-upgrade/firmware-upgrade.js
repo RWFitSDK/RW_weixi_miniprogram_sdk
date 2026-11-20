@@ -245,8 +245,9 @@ Page({
         showCancel: false,
       });
     } catch (error) {
-      this.setData({ statusText: `升级失败：${error.message || error}` });
-      wx.showModal({ title: "升级失败", content: error.message || String(error), showCancel: false });
+      const detail = error?.message || String(error);
+      this.setData({ statusText: `升级失败：${detail}` });
+      wx.showModal({ title: "升级失败", content: detail, showCancel: false });
     } finally {
       this.setData({ upgrading: false });
       if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload({});
